@@ -9,12 +9,23 @@ export interface ChangelogEntry {
 // 并同步 package.json / package-lock.json 版本号与本地备份。
 export const APP_CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.20',
+    date: '2026-06-21',
+    title: '开源发布与 GitHub 安全整理',
+    changes: [
+      '完成开源发布前的安全整理，新增 .env.local.example、SECURITY.md，并强化 .gitignore，排除本地密钥、日志、运行统计、Codex 本地资料和构建缓存。',
+      '重新初始化干净 Git 仓库，避免携带旧历史中的本机路径或敏感信息，并将首个开源提交推送到 GitHub 仓库 zhang3phone/aepi。',
+      '配置本机 GitHub SSH 推送环境，后续在当前项目目录可直接使用 git push 同步更新。',
+      '移除关于页装饰背景素材，避免公开仓库包含未确认授权的外部 IP 图片资源。',
+    ],
+  },
+  {
     version: '0.1.19',
     date: '2026-06-20',
     title: 'Stardust Memory 品牌与本机启动完善',
     changes: [
       '统一修正 Stardust Memory 品牌拼写，并将顶部与首页副标题统一为“多媒体处理工作站”。',
-      '优化“设置 > 关于”页：更新 Anaheim Electronics 介绍文案，将 @ZHANG3PHONE 链接指向 AMZ945.COM，并加入淡化背景图。',
+      '优化“设置 > 关于”页：更新 Anaheim Electronics 介绍文案，并将 @ZHANG3PHONE 链接指向 AMZ945.COM。',
       '完善本机启动脚本，启动前端时同步拉起 3100 API 代理，并配合 Windows 任务计划程序支持登录后自动启动。',
       '修正版本备份脚本的备份目录和输出文案，备份包统一写入 D:\\生图系统\\版本备份，并继续排除本地密钥与缓存文件。',
       '强化 Listing 信息拆解：适用人群与使用场景作为关键字段，用户未提供时会根据商品标题、类目、卖点和材质推断最高概率结果。',
