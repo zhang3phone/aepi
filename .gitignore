@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+!.env.local.example
+dev-proxy.config.json
+
+# Local dev/runtime state
+.amazon-image-studio-dev.pid
+.amazon-image-studio-deps.hash
+.duncan-generation-stats.json
+.duncan-shared-style-references.json
+*.pid
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local Codex/project-private instructions and generated manifests
+AGENTS.md
+.agents/
+skills/
+backup-manifest.json
+
+# Test and tool output
+test-results/
+coverage/
+.cache/
+.vite/
+.vitest/
+
+# Deployment tool local state
+.wrangler/
+.vercel/
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/

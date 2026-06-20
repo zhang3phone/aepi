@@ -1,0 +1,18 @@
+{
+  "name": "AEPI03-Stardust Memory",
+  "short_name": "AEPI03",
+  "description": "Internal development build for image planning, generation, and processing.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "./ae-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
