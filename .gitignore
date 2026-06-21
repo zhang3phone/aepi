@@ -26,6 +26,11 @@ pnpm-debug.log*
 # Local Codex/project-private instructions and generated manifests
 AGENTS.md
 .agents/
+run-dev-local.bat
+start-duncan-image-center.bat
+start-startdust-image-studio.bat
+stop-amazon-image-studio.bat
+edit-startdust-api-config.bat
 skills/
 !skills/
 skills/*

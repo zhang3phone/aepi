@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+﻿import { describe, expect, it } from 'vitest'
 import { estimateTextTokens, formatTokenCount } from './tokenUsage'
 
 describe('token usage estimator', () => {
@@ -11,10 +11,11 @@ describe('token usage estimator', () => {
   })
 
   it('counts cjk characters individually', () => {
-    expect(estimateTextTokens('云羿智能图形处理中心')).toBe(10)
+    expect(estimateTextTokens('多媒体处理工作站')).toBe(8)
   })
 
   it('formats token counts for display', () => {
     expect(formatTokenCount(12345)).toBe('12,345')
   })
 })
+

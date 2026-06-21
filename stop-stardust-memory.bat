@@ -1,13 +1,13 @@
-@echo off
+﻿@echo off
 setlocal
 
 for %%I in ("%~dp0.") do set "PROJECT_DIR=%%~fI"
-set "PID_FILE=%PROJECT_DIR%\.amazon-image-studio-dev.pid"
-set "PROXY_PID_FILE=%PROJECT_DIR%\.amazon-image-studio-proxy.pid"
+set "PID_FILE=%PROJECT_DIR%\.stardust-memory-dev.pid"
+set "PROXY_PID_FILE=%PROJECT_DIR%\.stardust-memory-proxy.pid"
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$project = (Resolve-Path -LiteralPath '%PROJECT_DIR%').Path;" ^
-  "$appName = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('5Lqa6ams6YCK5Zu+54mH5bel5L2c5Y+w'));" ^
+  "$appName = 'AEPI03-Stardust Memory';" ^
   "$pidFile = '%PID_FILE%';" ^
   "$proxyPidFile = '%PROXY_PID_FILE%';" ^
   "$stopped = $false;" ^
@@ -62,3 +62,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "if ($stopped) { Write-Host ($appName + ' dev server stopped.') } else { Write-Host ('No ' + $appName + ' dev server was found.') }"
 
 endlocal
+

@@ -1,6 +1,6 @@
-﻿# 亚马逊图片工作台
+﻿# AEPI03-Stardust Memory
 
-亚马逊图片工作台是一个面向 Amazon Listing 的产品图片策划与生成工作台，基于 [CookSleep/gpt_image_playground](https://github.com/CookSleep/gpt_image_playground) 修改。
+AEPI03-Stardust Memory 是 zhang3phone / Anaheim Electronics 维护的多媒体处理工作站，面向 Amazon Listing、A+ Content 和电商素材生产流程，基于 [CookSleep/gpt_image_playground](https://github.com/CookSleep/gpt_image_playground) 二次开发。
 
 它适合用来把产品标题、五点描述、卖点文案和参考图，整理成 Amazon Listing 图片或 A+ Content 图片策划，并逐张生成图片。
 
@@ -8,7 +8,7 @@
 
 ## 开源说明
 
-本仓库公开的是前端应用源码、Amazon 图片策划逻辑、Prompt 模板、知识文档、本地启动脚本和部署配置，采用 [MIT License](LICENSE) 发布。
+本仓库公开的是 AEPI03-Stardust Memory 的前端应用源码、Amazon 图片策划逻辑、Prompt 模板、知识文档、本地启动脚本和部署配置，采用 [MIT License](LICENSE) 发布。
 
 需要注意：
 
@@ -57,7 +57,7 @@
 - 更新 dev proxy、mock image API、接口兼容测试和参数兼容逻辑。
 - 内置 Amazon 图片规范、附图策划逻辑和 A+ 尺寸知识文档。
 - 策划接口会引用内置知识规则，提高 Listing / A+ 策划稳定性。
-- 项目名称统一调整为“亚马逊图片工作台”，同步页面标题、PWA manifest、启动脚本和界面文案。
+- 早期版本曾使用内部工作名，后续已迁移为 AEPI03-Stardust Memory 品牌。
 - README 增加更完整的本地安装、启动和交付说明，历史记录搜索栏增加清理能力。
 - 优化 Amazon Planner 工作流说明、Listing 图片策划模板、复制逻辑和相关测试。
 - 提交：`a85312c`、`7c231bf`、`899532d`、`5cc09c4`、`0c8b9ec`、`d1de756`、`81a3fbd`、`3778620`。
@@ -136,12 +136,12 @@ https://github.com/zhang3phone/aepi
 1. 先确认本机已经安装 Node.js 20 LTS 或更新版本和 npm。
 2. 如果本地还没有项目，就 clone 仓库；如果已经下载 ZIP 或源码文件夹，直接进入现有项目目录，不要重复下载。
 3. 在项目目录运行 npm ci 安装依赖。
-4. 如果我是 Windows 用户，优先检查仓库里的 start-startdust-image-studio.bat，能用的话帮我用它启动项目；停止时可以用 stop-amazon-image-studio.bat。
+4. 如果我是 Windows 用户，优先检查仓库里的 start-stardust-memory.bat，能用的话帮我用它启动项目；停止时可以用 stop-stardust-memory.bat。
 5. 如果不使用 bat 脚本，就运行 npm run dev 启动项目。
 6. 告诉我浏览器应该打开哪个本地地址。
 ```
 
-如果 AI 工具不会自动执行命令，也可以让它按下面“方式二：手动安装（通用）”和“启动项目”里的命令一步一步带你操作。Windows 用户可以优先双击 `start-startdust-image-studio.bat` 启动；脚本会在首次启动或依赖变更后自动安装依赖，停止时双击 `stop-amazon-image-studio.bat`。项目启动后，每个使用者都需要在页面右上角设置里填写自己的 API Key；不要把你的 API Key 发给别人。
+如果 AI 工具不会自动执行命令，也可以让它按下面“方式二：手动安装（通用）”和“启动项目”里的命令一步一步带你操作。Windows 用户可以优先双击 `start-stardust-memory.bat` 启动；脚本会在首次启动或依赖变更后自动安装依赖，停止时双击 `stop-stardust-memory.bat`。项目启动后，每个使用者都需要在页面右上角设置里填写自己的 API Key；不要把你的 API Key 发给别人。
 
 ### 方式二：手动安装（通用）
 
@@ -185,7 +185,7 @@ http://127.0.0.1:5173/
 仓库根目录包含 Windows 便捷脚本：
 
 ```text
-start-startdust-image-studio.bat
+start-stardust-memory.bat
 ```
 
 双击后会启动本地开发服务，并自动打开浏览器：
@@ -205,7 +205,7 @@ http://127.0.0.1:5173/
 如果使用 Windows 双击脚本启动，也可以双击：
 
 ```text
-stop-amazon-image-studio.bat
+stop-stardust-memory.bat
 ```
 
 脚本会停止当前项目对应的本地开发服务。如果 5173 端口被其它程序占用，脚本不会强行关闭无关进程。
@@ -306,14 +306,14 @@ npm ci
 npm run dev
 ```
 
-Windows 用户也可以重新双击 `start-startdust-image-studio.bat`。
+Windows 用户也可以重新双击 `start-stardust-memory.bat`。
 
 ### 5173 端口被占用
 
 如果是手动启动，先在终端中按 `Ctrl + C`。如果是 Windows 脚本启动，可以双击：
 
 ```text
-stop-amazon-image-studio.bat
+stop-stardust-memory.bat
 ```
 
 如果仍然提示被占用，说明 5173 可能被其它程序使用，需要先关闭对应程序，或改用 Vite 输出的其它端口。
@@ -417,6 +417,8 @@ npm run build
 本项目基于 MIT 许可的 [GPT Image Playground](https://github.com/CookSleep/gpt_image_playground) 修改，原作者为 CookSleep。
 
 请保留应用内“关于”页中的原项目署名与 MIT 许可声明。
+
+
 
 
 

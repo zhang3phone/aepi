@@ -1,15 +1,15 @@
-@echo off
+﻿@echo off
 setlocal
 
 for %%I in ("%~dp0.") do set "PROJECT_DIR=%%~fI"
 set "APP_URL=http://127.0.0.1:5173/"
-set "PID_FILE=%PROJECT_DIR%\.amazon-image-studio-dev.pid"
-set "PROXY_PID_FILE=%PROJECT_DIR%\.amazon-image-studio-proxy.pid"
+set "PID_FILE=%PROJECT_DIR%\.stardust-memory-dev.pid"
+set "PROXY_PID_FILE=%PROJECT_DIR%\.stardust-memory-proxy.pid"
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$project = (Resolve-Path -LiteralPath '%PROJECT_DIR%').Path;" ^
-  "$appName = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('5Lqa6ams6YCK5Zu+54mH5bel5L2c5Y+w'));" ^
-  "$serverTitle = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('5Lqa6ams6YCK5Zu+54mH5bel5L2c5Y+w5byA5Y+R5pyN5Yqh5Zmo'));" ^
+  "$appName = 'AEPI03-Stardust Memory';" ^
+  "$serverTitle = 'AEPI03-Stardust Memory Dev Server';" ^
   "$projectMatch = $project;" ^
   "$pidFile = '%PID_FILE%';" ^
   "$proxyPidFile = '%PROXY_PID_FILE%';" ^
@@ -52,9 +52,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 
 if errorlevel 1 (
   echo.
-  echo Failed to start Amazon Image Studio.
+  echo Failed to start AEPI03-Stardust Memory.
   pause
   exit /b 1
 )
 
 endlocal
+

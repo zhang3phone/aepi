@@ -1,4 +1,4 @@
-export interface ChangelogEntry {
+﻿export interface ChangelogEntry {
   version: string
   date: string
   title: string
@@ -164,7 +164,7 @@ export const APP_CHANGELOG: ChangelogEntry[] = [
     date: '2026-06-18',
     title: '顶部品牌区显示版本号',
     changes: [
-      '在顶部“Duncan Image Center”品牌标识后增加当前版本号，方便区分本地运行版本和局域网访问版本。',
+      '在顶部“旧内部图像中心”品牌标识后增加当前版本号，方便区分本地运行版本和局域网访问版本。',
       '同步更新 package.json 与 package-lock.json 版本到 v0.1.5。',
     ],
   },
@@ -207,17 +207,18 @@ export const APP_CHANGELOG: ChangelogEntry[] = [
       '本地 API 代理支持可选出站代理配置，便于主机通过 Clash 或兼容网关访问上游模型接口。',
       'API 设置增加 DeepSeek 与本地 OpenAI 兼容模型入口，并增加明确的“保存”按钮和保存成功提示。',
       '修复设置弹窗关闭后可能覆盖已保存 API 配置的问题。',
-      '优化云羿智能图形处理中心品牌展示，并将 DUNCAN 说明调整为更适合工作区阅读的横向布局。',
+      '优化早期内部图像处理中心品牌展示，并将 旧内部版 说明调整为更适合工作区阅读的横向布局。',
     ],
   },
   {
     version: '0.1.0',
     date: '2026-06-17',
-    title: '云羿智能图形处理中心本地版',
+    title: '早期内部图像处理中心本地版',
     changes: [
       '搭建 Amazon Listing 与 A+ 图像策划工作区，支持商品信息、参考图、风格参考与提示词流程。',
       '支持 2K / 4K 生成参数、图片参考上传、任务历史、数据导入导出与多 API 配置管理。',
-      '完成从原版 GPT Image Playground 到云羿内部图像处理中心的基础品牌改造。',
+      '完成从原版 GPT Image Playground 到早期内部图像处理中心的基础品牌改造。',
     ],
   },
 ]
+

@@ -35,7 +35,7 @@
 - 更新 dev proxy、mock image API、接口兼容测试和参数兼容逻辑。
 - 内置 Amazon 图片规范、附图策划逻辑和 A+ 尺寸知识文档。
 - 策划接口会引用内置知识规则，提高 Listing / A+ 策划稳定性。
-- 项目名称统一调整为“亚马逊图片工作台”，同步页面标题、PWA manifest、启动脚本和界面文案。
+- 早期工作名迁移为 AEPI03-Stardust Memory，统一页面标题、PWA manifest、启动脚本和界面文案。
 - README 增加更完整的本地安装、启动和交付说明，历史记录搜索栏增加清理能力。
 - 优化 Amazon Planner 工作流说明、Listing 图片策划模板、复制逻辑和相关测试。
 - 提交：`a85312c`、`7c231bf`、`899532d`、`5cc09c4`、`0c8b9ec`、`d1de756`、`81a3fbd`、`3778620`。

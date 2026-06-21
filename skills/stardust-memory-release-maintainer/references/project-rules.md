@@ -1,4 +1,4 @@
-# Stardust Memory Project Rules
+﻿# Stardust Memory Project Rules
 
 ## Identity
 
@@ -30,9 +30,9 @@ Use `cmd.exe /c npm ...` because PowerShell execution policy can block npm scrip
 
 Important project launchers:
 
-- `start-startdust-image-studio.bat`
-- `stop-amazon-image-studio.bat`
-- `edit-startdust-api-config.bat`
+- `start-stardust-memory.bat`
+- `stop-stardust-memory.bat`
+- `edit-stardust-memory-api-key.bat`
 
 The frontend normally runs on `http://127.0.0.1:5173/`.
 
@@ -72,3 +72,4 @@ If source listing text does not include them, infer the most likely target audie
 ## Open-Source Caveat
 
 Avoid committing third-party character/product images or fandom assets unless the user confirms they have rights. Replace them with original or generated assets before public release.
+

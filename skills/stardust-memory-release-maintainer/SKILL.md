@@ -1,4 +1,4 @@
----
+﻿---
 name: stardust-memory-release-maintainer
 description: Maintain, release, back up, open-source, and GitHub-publish the Stardust Memory / AEPI03 image workstation safely. Use when Codex is asked to update versions, prepare releases, audit secrets before publishing, configure GitHub remotes/SSH, push to GitHub, migrate the project to another Windows PC, or modify the local startup/API proxy workflow.
 ---
@@ -23,7 +23,7 @@ Use this skill when working in a repository that contains most of:
 - `package.json` with the Stardust/Amazon image studio frontend.
 - `scripts/local-api-proxy.mjs`.
 - `src/changelog.ts`.
-- Windows BAT launchers such as `start-startdust-image-studio.bat`.
+- Windows BAT launchers such as `start-stardust-memory.bat`.
 - Local runtime files such as `.env.local`, `.duncan-generation-stats.json`, or `.duncan-shared-style-references.json`.
 
 If the user asks for GitHub/open-source handling, read `references/github-release.md`.
@@ -111,3 +111,4 @@ When working for another user:
 - State exactly what was committed, backed up, and pushed.
 - Give the final GitHub URL, commit hash, version number, and backup path when available.
 - If a GitHub authentication step requires the user, give only the next concrete action.
+
