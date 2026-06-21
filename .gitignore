@@ -27,6 +27,11 @@ pnpm-debug.log*
 AGENTS.md
 .agents/
 skills/
+!skills/
+skills/*
+!skills/stardust-memory-release-maintainer/
+!skills/stardust-memory-release-maintainer/**
+skills/*.zip
 backup-manifest.json
 
 # Test and tool output

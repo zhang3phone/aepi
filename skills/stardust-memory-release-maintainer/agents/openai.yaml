@@ -1,0 +1,7 @@
+interface:
+  display_name: "Stardust Memory Release Maintainer"
+  short_description: "Safe versioning, backups, GitHub publishing"
+  default_prompt: "Use $stardust-memory-release-maintainer to safely prepare, version, back up, and publish the Stardust Memory image workstation."
+
+policy:
+  allow_implicit_invocation: true
