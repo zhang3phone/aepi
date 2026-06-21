@@ -4,7 +4,7 @@
 
 它适合用来把产品标题、五点描述、卖点文案和参考图，整理成 Amazon Listing 图片或 A+ Content 图片策划，并逐张生成图片。
 
-项目仓库：[Ali-Aria/amazon-image-studio](https://github.com/Ali-Aria/amazon-image-studio)
+项目仓库：[zhang3phone/aepi](https://github.com/zhang3phone/aepi)
 
 ## 开源说明
 
@@ -79,7 +79,7 @@
 
 ## 在线体验
 
-- 体验地址：[https://ali-aria.github.io/amazon-image-studio/](https://ali-aria.github.io/amazon-image-studio/)
+- 体验地址：[https://zhang3phone.github.io/aepi/](https://zhang3phone.github.io/aepi/)
 - 打开在线体验不需要 Codex；Codex 只是一种可选的本地安装方式。
 - 在线体验不会内置 API Key；生成图片和 AI 策划都需要在右上角设置中填写你自己的 OpenAI 或兼容接口 Key。
 - API Key 保存在当前浏览器本地，不会提交到仓库；如果线上页面加载异常，也可以按下面的“启动项目”在本地运行。
@@ -123,14 +123,14 @@ npm --version
 如果你要把项目发给别人使用，最简单的方式是直接发 GitHub 仓库链接：
 
 ```text
-https://github.com/Ali-Aria/amazon-image-studio
+https://github.com/zhang3phone/aepi
 ```
 
 对方可以在 Codex、Claude Code、Claw Code 或其它 AI 编程工具里粘贴下面这段话：
 
 ```text
 请把这个 GitHub 项目安装到我的本地电脑并启动：
-https://github.com/Ali-Aria/amazon-image-studio
+https://github.com/zhang3phone/aepi
 
 要求：
 1. 先确认本机已经安装 Node.js 20 LTS 或更新版本和 npm。
@@ -148,8 +148,8 @@ https://github.com/Ali-Aria/amazon-image-studio
 先把仓库下载到本地：
 
 ```powershell
-git clone https://github.com/Ali-Aria/amazon-image-studio.git
-cd amazon-image-studio
+git clone https://github.com/zhang3phone/aepi.git
+cd aepi
 ```
 
 如果你已经下载了 ZIP 或复制了源码文件夹，直接在终端进入你自己的项目目录即可。
@@ -369,12 +369,12 @@ Node.js version: 20
 2. `Build and deployment` 的 `Source` 选择 `GitHub Actions`。
 3. 推送到 `main` 后会自动构建并部署。也可以在 `Actions` 页面手动运行 `Deploy to GitHub Pages`，或推送 `v*` 格式的 tag，例如 `v0.1.0`。
 
-项目的 Vite `base` 已设置为 `./`，可以部署在 `https://<username>.github.io/amazon-image-studio/` 这类子路径下。
+项目的 Vite `base` 已设置为 `./`，可以部署在 `https://<username>.github.io/aepi/` 这类子路径下。
 
 当前仓库的 GitHub Pages 体验地址：
 
 ```text
-https://ali-aria.github.io/amazon-image-studio/
+https://zhang3phone.github.io/aepi/
 ```
 
 ### Cloudflare Pages
@@ -417,4 +417,6 @@ npm run build
 本项目基于 MIT 许可的 [GPT Image Playground](https://github.com/CookSleep/gpt_image_playground) 修改，原作者为 CookSleep。
 
 请保留应用内“关于”页中的原项目署名与 MIT 许可声明。
+
+
 

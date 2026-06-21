@@ -1,16 +1,16 @@
 {
-  "name": "amazon-image-studio",
+  "name": "aepi-stardust-memory",
   "description": "Amazon Listing image planning and generation workspace.",
   "private": true,
   "version": "0.1.20",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Ali-Aria/amazon-image-studio.git"
+    "url": "https://github.com/zhang3phone/aepi.git"
   },
-  "homepage": "https://ali-aria.github.io/amazon-image-studio/",
+  "homepage": "https://zhang3phone.github.io/aepi/",
   "bugs": {
-    "url": "https://github.com/Ali-Aria/amazon-image-studio/issues"
+    "url": "https://github.com/zhang3phone/aepi/issues"
   },
   "type": "module",
   "scripts": {
