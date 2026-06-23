@@ -1880,36 +1880,37 @@ export default function AmazonPlanner({ workspaceModule = DEFAULT_WORKSPACE_MODU
               </div>
             </label>
             {isClothingWorkspace && plannerMode === 'listing' && (
-              <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3 dark:border-blue-400/20 dark:bg-blue-400/10">
+              <div className="mt-3 overflow-hidden rounded-xl border border-blue-200 bg-white p-3 shadow-sm ring-1 ring-red-500/10 dark:border-blue-300/25 dark:bg-slate-950 dark:ring-red-400/10">
+                <div className="-mx-3 -mt-3 mb-3 h-1 bg-gradient-to-r from-red-500 via-white to-blue-600 dark:from-red-400 dark:via-slate-950 dark:to-blue-400" />
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-md bg-blue-600 px-2 py-0.5 text-[11px] font-bold text-white">MODEL</span>
+                      <span className="rounded-md bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm shadow-red-600/20">MODEL</span>
                       <span className="text-sm font-semibold text-blue-950 dark:text-blue-100">白底模特主图</span>
-                      <span className="rounded-md bg-white px-2 py-0.5 text-[11px] font-semibold text-blue-700 shadow-sm dark:bg-white/[0.08] dark:text-blue-100">
+                      <span className="rounded-md border border-blue-100 bg-white px-2 py-0.5 text-[11px] font-semibold text-blue-700 shadow-sm dark:border-blue-300/20 dark:bg-white/[0.08] dark:text-blue-100">
                         {CLOTHING_MODEL_TARGET_SIZE}
                       </span>
                     </div>
-                    <div className="mt-1 text-xs leading-relaxed text-blue-800/80 dark:text-blue-100/80">
+                    <div className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
                       只在服装版生效。上传的模特参考图只用于人物位置、裁切比例和姿势，不复制人物身份、脸、发型、纹身、首饰或包袋。
                     </div>
                   </div>
                   {hasClothingModelPlan && (
-                    <span className="shrink-0 rounded-lg bg-emerald-100 px-2 py-1 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-200">
+                    <span className="shrink-0 rounded-lg border border-blue-100 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700 ring-1 ring-red-500/10 dark:border-blue-300/20 dark:bg-blue-400/10 dark:text-blue-200 dark:ring-red-400/10">
                       已加入逐张策划
                     </span>
                   )}
                 </div>
                 <div className="mt-3 grid gap-3 xl:grid-cols-3">
                   <div>
-                    <div className="mb-1 text-[11px] font-semibold text-blue-800 dark:text-blue-100">模特类型</div>
-                    <div className="grid grid-cols-2 gap-1 rounded-lg border border-blue-100 bg-white p-1 dark:border-blue-300/20 dark:bg-gray-950">
+                    <div className="mb-1 text-[11px] font-semibold text-blue-700 dark:text-blue-100">模特类型</div>
+                    <div className="grid grid-cols-2 gap-1 rounded-lg border border-blue-100 bg-white p-1 shadow-inner shadow-blue-950/[0.03] dark:border-blue-300/20 dark:bg-slate-900">
                       {CLOTHING_MODEL_TYPE_OPTIONS.map((option) => (
                         <button
                           key={option}
                           type="button"
                           onClick={() => setClothingModelType(option)}
-                          className={`h-8 rounded-md px-2 text-xs font-semibold transition ${clothingModelType === option ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-blue-50 hover:text-blue-700 dark:text-gray-300 dark:hover:bg-blue-400/10 dark:hover:text-blue-100'}`}
+                          className={`h-8 rounded-md px-2 text-xs font-semibold transition ${clothingModelType === option ? 'bg-blue-600 text-white shadow-sm ring-1 ring-red-500/35' : 'text-gray-500 hover:bg-red-50 hover:text-red-700 dark:text-gray-300 dark:hover:bg-red-500/10 dark:hover:text-red-200'}`}
                         >
                           {getClothingModelTypeLabel(option)}
                         </button>
@@ -1917,14 +1918,14 @@ export default function AmazonPlanner({ workspaceModule = DEFAULT_WORKSPACE_MODU
                     </div>
                   </div>
                   <div>
-                    <div className="mb-1 text-[11px] font-semibold text-blue-800 dark:text-blue-100">角度</div>
-                    <div className="grid grid-cols-2 gap-1 rounded-lg border border-blue-100 bg-white p-1 dark:border-blue-300/20 dark:bg-gray-950">
+                    <div className="mb-1 text-[11px] font-semibold text-blue-700 dark:text-blue-100">角度</div>
+                    <div className="grid grid-cols-2 gap-1 rounded-lg border border-blue-100 bg-white p-1 shadow-inner shadow-blue-950/[0.03] dark:border-blue-300/20 dark:bg-slate-900">
                       {CLOTHING_MODEL_ANGLE_OPTIONS.map((option) => (
                         <button
                           key={option}
                           type="button"
                           onClick={() => setClothingModelAngle(option)}
-                          className={`h-8 rounded-md px-2 text-xs font-semibold transition ${clothingModelAngle === option ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-blue-50 hover:text-blue-700 dark:text-gray-300 dark:hover:bg-blue-400/10 dark:hover:text-blue-100'}`}
+                          className={`h-8 rounded-md px-2 text-xs font-semibold transition ${clothingModelAngle === option ? 'bg-blue-600 text-white shadow-sm ring-1 ring-red-500/35' : 'text-gray-500 hover:bg-red-50 hover:text-red-700 dark:text-gray-300 dark:hover:bg-red-500/10 dark:hover:text-red-200'}`}
                         >
                           {getClothingModelAngleLabel(option)}
                         </button>
@@ -1932,14 +1933,14 @@ export default function AmazonPlanner({ workspaceModule = DEFAULT_WORKSPACE_MODU
                     </div>
                   </div>
                   <div>
-                    <div className="mb-1 text-[11px] font-semibold text-blue-800 dark:text-blue-100">手臂姿势</div>
-                    <div className="grid grid-cols-2 gap-1 rounded-lg border border-blue-100 bg-white p-1 dark:border-blue-300/20 dark:bg-gray-950">
+                    <div className="mb-1 text-[11px] font-semibold text-blue-700 dark:text-blue-100">手臂姿势</div>
+                    <div className="grid grid-cols-2 gap-1 rounded-lg border border-blue-100 bg-white p-1 shadow-inner shadow-blue-950/[0.03] dark:border-blue-300/20 dark:bg-slate-900">
                       {CLOTHING_MODEL_ARM_POSE_OPTIONS.map((option) => (
                         <button
                           key={option}
                           type="button"
                           onClick={() => setClothingModelArmPose(option)}
-                          className={`h-8 rounded-md px-2 text-xs font-semibold transition ${clothingModelArmPose === option ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-blue-50 hover:text-blue-700 dark:text-gray-300 dark:hover:bg-blue-400/10 dark:hover:text-blue-100'}`}
+                          className={`h-8 rounded-md px-2 text-xs font-semibold transition ${clothingModelArmPose === option ? 'bg-blue-600 text-white shadow-sm ring-1 ring-red-500/35' : 'text-gray-500 hover:bg-red-50 hover:text-red-700 dark:text-gray-300 dark:hover:bg-red-500/10 dark:hover:text-red-200'}`}
                         >
                           {getClothingModelArmPoseLabel(option)}
                         </button>
@@ -1948,13 +1949,13 @@ export default function AmazonPlanner({ workspaceModule = DEFAULT_WORKSPACE_MODU
                   </div>
                 </div>
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-[11px] leading-relaxed text-blue-800/80 dark:text-blue-100/75">
+                  <div className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
                     建议同时上传商品实拍图和模特白底构图参考图；生成时不会添加卖点、图标、Logo、文字或场景道具。
                   </div>
                   <button
                     type="button"
                     onClick={upsertClothingModelPlan}
-                    className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white transition hover:bg-blue-500"
+                    className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white shadow-sm shadow-blue-600/20 ring-1 ring-red-500/20 transition hover:bg-blue-500"
                   >
                     {hasClothingModelPlan ? '更新 MODEL' : '加入 MODEL'}
                   </button>
