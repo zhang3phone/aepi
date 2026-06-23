@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useStore } from '../store'
 import { useTooltip } from '../hooks/useTooltip'
 import { dismissAllTooltips } from '../lib/tooltipDismiss'
+import { getAppVersionDate } from '../changelog'
 import ViewportTooltip from './ViewportTooltip'
 import HelpModal from './HelpModal'
 import { HelpCircleIcon, InstallIcon, SettingsIcon } from './icons'
@@ -26,6 +27,7 @@ export default function Header() {
   const installTooltip = useTooltip()
   const helpTooltip = useTooltip()
   const settingsTooltip = useTooltip()
+  const appVersionDate = getAppVersionDate(__APP_VERSION__)
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (event: Event) => {
@@ -101,7 +103,7 @@ export default function Header() {
                   多媒体处理工作站
                 </span>
                 <span className="rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-slate-500 dark:border-white/[0.08] dark:bg-white/[0.06] dark:text-slate-400">
-                  v{__APP_VERSION__}
+                  v{__APP_VERSION__}{appVersionDate ? ` · ${appVersionDate}` : ''}
                 </span>
               </span>
             </span>

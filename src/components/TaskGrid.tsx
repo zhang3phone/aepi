@@ -1,9 +1,15 @@
 import { useMemo, useRef, useState, useEffect } from 'react'
 import { useStore, reuseConfig, editOutputs, removeTask } from '../store'
 import { matchesTaskHistoryFilters } from '../lib/taskHistory'
+import { DEFAULT_WORKSPACE_MODULE } from '../lib/workspaceModules'
+import type { WorkspaceModule } from '../types'
 import TaskCard from './TaskCard'
 
-export default function TaskGrid() {
+interface TaskGridProps {
+  workspaceModule?: WorkspaceModule
+}
+
+export default function TaskGrid({ workspaceModule = DEFAULT_WORKSPACE_MODULE }: TaskGridProps) {
   const tasks = useStore((s) => s.tasks)
   const searchQuery = useStore((s) => s.searchQuery)
   const filterStatus = useStore((s) => s.filterStatus)
@@ -42,8 +48,9 @@ export default function TaskGrid() {
       filterProductTitle,
       filterWorkflow,
       filterAspect,
+      workspaceModule,
     }))
-  }, [tasks, searchQuery, filterStatus, filterFavorite, filterProductTitle, filterWorkflow, filterAspect])
+  }, [tasks, searchQuery, filterStatus, filterFavorite, filterProductTitle, filterWorkflow, filterAspect, workspaceModule])
 
   const handleDelete = (task: typeof tasks[0]) => {
     setConfirmDialog({

@@ -6,24 +6,45 @@ import {
   type AmazonPromptDraft,
 } from '../lib/amazonPrompt'
 import {
+  areAPlusModuleSpecsEquivalent,
   buildAmazonAPlusPlanPrompt,
   buildAmazonPlanPrompt,
+  buildClothingModelPlan,
+  CLOTHING_MODEL_TARGET_SIZE,
+  DEFAULT_LISTING_IMAGE_COUNT,
   formatAPlusModuleText,
+  formatAmazonListingSlotRange,
   getAPlusContentTypeLabel,
+  getClothingModelAngleLabel,
+  getClothingModelArmPoseLabel,
+  getClothingModelTypeLabel,
   getAPlusModuleDisplayName,
   getAPlusModuleEnglishName,
   getAPlusModuleGenerationSize,
   getAPlusModuleSpecs,
   getAPlusModuleUploadSize,
+  insertAPlusModuleSpecAfter,
   isAmazonListingMainSlot,
+  isClothingModelSlot,
   isAPlusTextModule,
+  LISTING_IMAGE_COUNT_OPTIONS,
+  MAX_A_PLUS_MODULE_COUNT,
+  MIN_A_PLUS_MODULE_COUNT,
+  normalizeAPlusModuleSpecs,
+  normalizeListingImageCount,
+  removeAPlusModuleSpecAt,
   withAPlusGenerationSizes,
   type APlusContentType,
+  type AmazonAPlusModuleSpec,
   type AmazonAPlusPlan,
   type AmazonImagePlan,
   type AmazonPlannerMode,
   type AmazonStyleDensityMode,
+  type ClothingModelAngle,
+  type ClothingModelArmPose,
+  type ClothingModelType,
 } from '../lib/listingPlanner'
+import { DEFAULT_WORKSPACE_MODULE, belongsToWorkspaceModule, getWorkspaceModuleConfig } from '../lib/workspaceModules'
 import { callAmazonPlannerApi, type PlannerApiResult } from '../lib/listingPlannerApi'
 import { deleteAmazonPlannerSession, getAllAmazonPlannerSessions, putAmazonPlannerSession } from '../lib/db'
 import { prepareReferenceImagePayload, type PlannerReferenceImagePayload } from '../lib/referenceImagePayload'
@@ -52,9 +73,9 @@ import {
 } from '../lib/sharedCustomStyles'
 import { estimateTextTokens, formatTokenCount } from '../lib/tokenUsage'
 import { DEFAULT_PARAMS } from '../types'
-import type { AmazonPlannerSession, CustomStyleReference, StyleReferenceEditState } from '../types'
+import type { AmazonPlannerSession, CustomStyleReference, StyleReferenceEditState, WorkspaceModule } from '../types'
 import StyleReferenceEditorModal from './StyleReferenceEditorModal'
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, CopyIcon, EditIcon, EyeIcon, HistoryIcon, PhotoIcon, PlusIcon, TrashIcon } from './icons'
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, CopyIcon, EditIcon, EyeIcon, HistoryIcon, PhotoIcon, PlusIcon, RefreshIcon, TrashIcon } from './icons'
 
 const FIELD_CLASS = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-100 dark:placeholder:text-gray-500'
 const LABEL_CLASS = 'mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400'
@@ -80,15 +101,7 @@ type GuidePanelTone = 'white' | 'muted'
 type PlannerActionProgress = 'filled' | 'submitted'
 type PlannerActionProgressMap = Record<string, PlannerActionProgress>
 type MobileActionDock = 'left' | 'right' | null
-type ListingSpecialPlan = 'clothing-model'
-type ClothingModelSkinTone = 'white' | 'black'
-type ClothingModelPose =
-  | 'front-hands-waist'
-  | 'front-arms-crossed'
-  | 'front-arms-down'
-  | 'angle-hands-waist'
-  | 'angle-arms-crossed'
-  | 'angle-arms-down'
+type APlusModuleSpecsByType = Partial<Record<APlusContentType, AmazonAPlusModuleSpec[]>>
 type SelectedStyleReference = {
   presetId: string | null
   customStyleReferenceId: string | null
@@ -106,23 +119,10 @@ type StylePreviewState = {
   top: number
 }
 const PLANNER_HISTORY_LIMIT = 30
-const CLOTHING_MODEL_SIZE = '1000x1000'
-const CLOTHING_MODEL_SLOT = 'MODEL'
-const CLOTHING_MODEL_LABEL = '服装无头模特白底图'
-const CLOTHING_MODEL_ACTION_KEY = 'listing:clothing-model'
-const CLOTHING_MODEL_COMPOSITION_GUIDE = '参考图式半身构图：纯白背景，人物居中，从颈部/肩线附近裁掉头部，到大腿上方或短裤位置结束，服装占画面主体，双臂和衣身完整可见。'
-const CLOTHING_MODEL_SKIN_OPTIONS: Array<{ value: ClothingModelSkinTone; label: string; prompt: string }> = [
-  { value: 'white', label: '白人模特', prompt: 'a white / Caucasian adult model' },
-  { value: 'black', label: '黑人模特', prompt: 'a Black / African adult model' },
-]
-const CLOTHING_MODEL_POSE_OPTIONS: Array<{ value: ClothingModelPose; label: string; prompt: string }> = [
-  { value: 'front-hands-waist', label: '正面 · 双手叉腰', prompt: 'front-facing stance with both hands on waist' },
-  { value: 'front-arms-crossed', label: '正面 · 双手环抱', prompt: 'front-facing stance with arms crossed' },
-  { value: 'front-arms-down', label: '正面 · 双手自然下垂', prompt: 'front-facing stance with both arms naturally straight down' },
-  { value: 'angle-hands-waist', label: '斜45度 · 双手叉腰', prompt: '45-degree three-quarter stance with both hands on waist' },
-  { value: 'angle-arms-crossed', label: '斜45度 · 双手环抱', prompt: '45-degree three-quarter stance with arms crossed' },
-  { value: 'angle-arms-down', label: '斜45度 · 双手自然下垂', prompt: '45-degree three-quarter stance with both arms naturally straight down' },
-]
+const A_PLUS_CONTENT_TYPES: APlusContentType[] = ['standard', 'standard-large', 'premium', 'mobile']
+const CLOTHING_MODEL_TYPE_OPTIONS: ClothingModelType[] = ['black', 'white']
+const CLOTHING_MODEL_ANGLE_OPTIONS: ClothingModelAngle[] = ['front', 'angle-45']
+const CLOTHING_MODEL_ARM_POSE_OPTIONS: ClothingModelArmPose[] = ['arms-down', 'arms-crossed']
 
 function createPlannerSessionId() {
   return `amazon-planner-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -140,6 +140,39 @@ function normalizeHistoryTitle(value: string) {
 
 function getPlannerSessionTitle(draft: AmazonPromptDraft, listingText: string) {
   return normalizeHistoryTitle(draft.productTitle) || normalizeHistoryTitle(listingText) || '未命名策划'
+}
+
+function getSessionListingImageCount(session: AmazonPlannerSession) {
+  if (session.listingImageCount != null) return normalizeListingImageCount(session.listingImageCount)
+  return normalizeListingImageCount(session.imagePlans.length || DEFAULT_LISTING_IMAGE_COUNT)
+}
+
+function getSessionAPlusModuleSpecsByType(session: AmazonPlannerSession): APlusModuleSpecsByType {
+  const sessionSpecs = session.aPlusModuleSpecs ?? {}
+  return A_PLUS_CONTENT_TYPES.reduce<APlusModuleSpecsByType>((result, type) => {
+    const specs = sessionSpecs[type]
+    if (Array.isArray(specs) && specs.length) {
+      const normalizedSpecs = normalizeAPlusModuleSpecs(type, specs as Array<Partial<AmazonAPlusModuleSpec>>)
+      if (!areAPlusModuleSpecsEquivalent(normalizedSpecs, getAPlusModuleSpecs(type))) {
+        result[type] = normalizedSpecs
+      }
+    }
+    return result
+  }, {})
+}
+
+function getAPlusModuleSpecsForSession(
+  specsByType: APlusModuleSpecsByType,
+): AmazonPlannerSession['aPlusModuleSpecs'] {
+  const entries = A_PLUS_CONTENT_TYPES
+    .map((type) => {
+      const specs = specsByType[type]
+      if (!specs?.length || areAPlusModuleSpecsEquivalent(specs, getAPlusModuleSpecs(type))) return null
+      return [type, specs] as const
+    })
+    .filter((entry): entry is readonly [APlusContentType, AmazonAPlusModuleSpec[]] => Boolean(entry))
+
+  return entries.length ? Object.fromEntries(entries) : undefined
 }
 
 function formatPlannerSessionTime(value: number) {
@@ -178,6 +211,10 @@ function fromSessionDraft(draft: AmazonPlannerSession['draft']): AmazonPromptDra
 
 function sortPlannerSessions(sessions: AmazonPlannerSession[]) {
   return [...sessions].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, PLANNER_HISTORY_LIMIT)
+}
+
+function isPlannerSessionInWorkspace(session: AmazonPlannerSession, workspaceModule: WorkspaceModule) {
+  return belongsToWorkspaceModule(session.workspaceModule, workspaceModule)
 }
 
 function getActionStepClass(status: WorkflowStepStatus) {
@@ -261,54 +298,6 @@ function getPlanSummary(planMarkdown: string) {
   return lines[0] ?? ''
 }
 
-function getClothingModelOption<T extends { value: string }>(options: T[], value: string): T {
-  return options.find((option) => option.value === value) ?? options[0]
-}
-
-function getClothingModelProductFacts(draft: AmazonPromptDraft) {
-  return [
-    draft.productTitle.trim() ? `Product title: ${draft.productTitle.trim()}` : '',
-    draft.category.trim() ? `Category: ${draft.category.trim()}` : '',
-    draft.color.trim() ? `Color: ${draft.color.trim()}` : '',
-    draft.material.trim() ? `Material / surface: ${draft.material.trim()}` : '',
-    draft.sellingPoints.trim() ? `Selling points: ${draft.sellingPoints.trim()}` : '',
-    draft.packageIncludes.trim() ? `Package includes: ${draft.packageIncludes.trim()}` : '',
-    draft.forbidden.trim() ? `Do not show: ${draft.forbidden.trim()}` : '',
-  ].filter(Boolean).join('\n')
-}
-
-function buildClothingModelPrompt(
-  draft: AmazonPromptDraft,
-  skinTone: ClothingModelSkinTone,
-  pose: ClothingModelPose,
-) {
-  const skin = getClothingModelOption(CLOTHING_MODEL_SKIN_OPTIONS, skinTone)
-  const poseOption = getClothingModelOption(CLOTHING_MODEL_POSE_OPTIONS, pose)
-  const productFacts = getClothingModelProductFacts(draft) || 'Preserve the exact apparel item from the uploaded reference images, including color, fabric texture, silhouette, length, seams, pockets, zipper, buttons, collar, hood, cuffs, and visible construction.'
-  const prompt = [
-    `Create an Amazon-compliant apparel main image, ${CLOTHING_MODEL_SIZE} px, pure white background (#FFFFFF), centered headless adult model wearing the product.`,
-    'Composition template: use the uploaded model reference images as framing and pose-scale references only. Follow this catalog composition: tight upper-body to upper-thigh crop, torso centered, garment large and readable, arms visible inside the frame, clean white margins, similar to a white-background Amazon apparel model photo. Do not copy the reference person, face, hair, tattoos, jewelry, handbag, shorts, accessories, identity, or styling details.',
-    `Model type requirement: use ${skin.prompt}; headless crop from around the lower neck / shoulder line downward, no head, no face, no hair, no facial features, no visible mannequin head.`,
-    `Pose requirement: ${poseOption.prompt}. Keep the garment front visible and readable, with realistic fit, natural proportions, straight posture, and clean commercial studio lighting.`,
-    'Product must be the only sold item in focus. Match the uploaded product reference and product facts exactly; keep accurate color, fabric texture, plaid/pattern direction, stitching, pockets, zipper, hood/collar, sleeve length, hem, and overall silhouette.',
-    `Product facts:\n${productFacts}`,
-    'Composition: product and model occupy most of the frame with clean margins, no crop through the garment, no lifestyle scene, no props, no text overlay, no badges, no border, no watermark, no marketplace logo. Professional e-commerce catalog photography suitable for Amazon apparel main image.',
-  ].join('\n\n')
-  const negativePrompt = [
-    'head, face, hair, eyes, mouth, facial features, visible mannequin head, copied identity, tattoos, necklace, jewelry, watch, bracelet, handbag, purse, extra accessories, cropped garment, missing sleeves, wrong pattern, wrong color, wrong fabric, distorted body, extra limbs, bad hands, lifestyle background, shadows on colored backdrop, gray background, props, hanger, support stand, packaging, text, letters, numbers, logo, watermark, badge, border, price, rating stars, Amazon logo, Prime logo',
-    draft.forbidden.trim(),
-  ].filter(Boolean).join(', ')
-  const planMarkdown = [
-    '目标：服装类 Amazon 主图白底模特展示。',
-    `规格：${CLOTHING_MODEL_SIZE}，纯白背景，无头成人模特。`,
-    `构图：${CLOTHING_MODEL_COMPOSITION_GUIDE}`,
-    `模特：${skin.label}；姿势：${poseOption.label}。`,
-    '要求：服装结构、颜色、材质和图案必须贴近参考图，不出现文字、水印、道具或生活场景。',
-  ].join('\n')
-
-  return { prompt, negativePrompt, planMarkdown, skinLabel: skin.label, poseLabel: poseOption.label }
-}
-
 function getAmazonAPlusComplianceChecks(
   draft: AmazonPromptDraft,
   plan: AmazonAPlusPlan | null,
@@ -351,6 +340,7 @@ function getAmazonListingPlannerChecks(
   referenceImageCount: number,
   hasStyleReference: boolean,
   styleReferenceRequired: boolean,
+  styleReferenceDisabledDetail = 'MAIN 主图不使用隐藏风格参考',
 ): Array<{ label: string; status: ComplianceStatus; detail: string }> {
   return [
     {
@@ -361,7 +351,7 @@ function getAmazonListingPlannerChecks(
     {
       label: '图片规格',
       status: /^(1000|2048|4096)x(1000|2048|4096)$/.test(size) ? 'ready' : 'warning',
-      detail: /1000x1000/.test(size) ? '服装白底主图' : /4096x4096/.test(size) ? '4K 方图' : /2048x2048/.test(size) ? '2K 方图' : size || '未选择 2K/4K',
+      detail: /1000x1000/.test(size) ? '1000x1000 白底图' : /4096x4096/.test(size) ? '4K 方图' : /2048x2048/.test(size) ? '2K 方图' : size || '未选择 2K/4K',
     },
     {
       label: '参考图',
@@ -372,13 +362,18 @@ function getAmazonListingPlannerChecks(
       label: '风格参考',
       status: !styleReferenceRequired || hasStyleReference ? 'ready' : 'warning',
       detail: !styleReferenceRequired
-        ? 'MAIN 主图不使用隐藏风格参考'
+        ? styleReferenceDisabledDetail
         : hasStyleReference ? '已选择隐藏风格参考' : '正式生成前请选择风格参考',
     },
   ]
 }
 
-export default function AmazonPlanner() {
+interface AmazonPlannerProps {
+  workspaceModule?: WorkspaceModule
+}
+
+export default function AmazonPlanner({ workspaceModule = DEFAULT_WORKSPACE_MODULE }: AmazonPlannerProps) {
+  const workspace = getWorkspaceModuleConfig(workspaceModule)
   const prompt = useStore((s) => s.prompt)
   const inputImages = useStore((s) => s.inputImages)
   const settings = useStore((s) => s.settings)
@@ -400,8 +395,13 @@ export default function AmazonPlanner() {
   const sharedStyleSaveTimerRef = useRef<number | null>(null)
   const [draft, setDraft] = useState<AmazonPromptDraft>(DEFAULT_AMAZON_PROMPT_DRAFT)
   const [resolution, setResolution] = useState<'2k' | '4k'>('2k')
+  const [listingImageCount, setListingImageCount] = useState(DEFAULT_LISTING_IMAGE_COUNT)
+  const [clothingModelType, setClothingModelType] = useState<ClothingModelType>('black')
+  const [clothingModelAngle, setClothingModelAngle] = useState<ClothingModelAngle>('front')
+  const [clothingModelArmPose, setClothingModelArmPose] = useState<ClothingModelArmPose>('arms-down')
   const [plannerMode, setPlannerMode] = useState<AmazonPlannerMode>('listing')
   const [aPlusType, setAPlusType] = useState<APlusContentType>('standard-large')
+  const [aPlusModuleSpecsByType, setAPlusModuleSpecsByType] = useState<APlusModuleSpecsByType>({})
   const [listingText, setListingText] = useState('')
   const [imagePlans, setImagePlans] = useState<AmazonImagePlan[]>([])
   const [aPlusPlans, setAPlusPlans] = useState<AmazonAPlusPlan[]>([])
@@ -426,9 +426,6 @@ export default function AmazonPlanner() {
   const [isSavingStyleEditor, setIsSavingStyleEditor] = useState(false)
   const [selectedPlanIndex, setSelectedPlanIndex] = useState<number | null>(null)
   const [selectedAPlusPlanIndex, setSelectedAPlusPlanIndex] = useState<number | null>(null)
-  const [selectedListingSpecialPlan, setSelectedListingSpecialPlan] = useState<ListingSpecialPlan | null>(null)
-  const [clothingModelSkinTone, setClothingModelSkinTone] = useState<ClothingModelSkinTone>('white')
-  const [clothingModelPose, setClothingModelPose] = useState<ClothingModelPose>('front-hands-waist')
   const [plannerSessions, setPlannerSessions] = useState<AmazonPlannerSession[]>([])
   const [currentPlannerSessionId, setCurrentPlannerSessionId] = useState<string | null>(null)
   const [showPlannerHistory, setShowPlannerHistory] = useState(false)
@@ -439,16 +436,20 @@ export default function AmazonPlanner() {
   const [actionProgress, setActionProgress] = useState<PlannerActionProgressMap>({})
   const [mobileActionDock, setMobileActionDock] = useState<MobileActionDock>(null)
   const resolutionTier = resolution === '4k' ? '4K' : '2K'
-  const aPlusSpecs = useMemo(() => getAPlusModuleSpecs(aPlusType), [aPlusType])
+  const listingSlotRange = formatAmazonListingSlotRange(listingImageCount)
+  const aPlusSpecs = useMemo(
+    () => normalizeAPlusModuleSpecs(aPlusType, aPlusModuleSpecsByType[aPlusType]),
+    [aPlusModuleSpecsByType, aPlusType],
+  )
+  const aPlusDefaultSpecs = useMemo(() => getAPlusModuleSpecs(aPlusType), [aPlusType])
+  const aPlusSpecsAreDefault = areAPlusModuleSpecsEquivalent(aPlusSpecs, aPlusDefaultSpecs)
   const aPlusPlansWithSizes = useMemo(() => withAPlusGenerationSizes(aPlusPlans, resolutionTier), [aPlusPlans, resolutionTier])
-  const isClothingModelPlanSelected = plannerMode === 'listing' && selectedListingSpecialPlan === 'clothing-model'
-  const selectedPlan = selectedPlanIndex == null || isClothingModelPlanSelected ? null : imagePlans[selectedPlanIndex] ?? null
+  const isClothingWorkspace = workspaceModule === 'clothing'
+  const existingClothingModelPlanIndex = imagePlans.findIndex((plan) => isClothingModelSlot(plan.slot))
+  const hasClothingModelPlan = existingClothingModelPlanIndex >= 0
+  const selectedPlan = selectedPlanIndex == null ? null : imagePlans[selectedPlanIndex] ?? null
   const selectedAPlusPlan = selectedAPlusPlanIndex == null ? null : aPlusPlansWithSizes[selectedAPlusPlanIndex] ?? null
   const selectedAPlusText = selectedAPlusPlan ? formatAPlusModuleText(selectedAPlusPlan) : ''
-  const clothingModelPlan = useMemo(
-    () => buildClothingModelPrompt(draft, clothingModelSkinTone, clothingModelPose),
-    [clothingModelPose, clothingModelSkinTone, draft],
-  )
   const customStyleReferences = settings.customStyleReferences ?? []
   const selectedStylePreset = getStylePresetById(selectedStylePresetId)
   const selectedStyleImage = selectedStyleReference
@@ -461,8 +462,11 @@ export default function AmazonPlanner() {
       }
     : selectedStylePreset
   const activeSeriesStyleGuide = plannerMode === 'aplus' ? seriesStyleGuides.aplus : seriesStyleGuides.listing
-  const isMainListingPlan = plannerMode === 'listing' && (isClothingModelPlanSelected || isAmazonListingMainSlot(selectedPlan?.slot))
-  const styleReferenceRequired = !isMainListingPlan
+  const isMainListingPlan = plannerMode === 'listing' && isAmazonListingMainSlot(selectedPlan?.slot)
+  const isSelectedClothingModelPlan = plannerMode === 'listing' && isClothingModelSlot(selectedPlan?.slot)
+  const listingTargetSize = isSelectedClothingModelPlan ? CLOTHING_MODEL_TARGET_SIZE : resolution === '4k' ? '4096x4096' : '2048x2048'
+  const targetSize = plannerMode === 'aplus' && selectedAPlusPlan ? selectedAPlusPlan.generationSize : listingTargetSize
+  const styleReferenceRequired = !(isMainListingPlan || isSelectedClothingModelPlan)
   const hasStyleReference = Boolean(selectedStyleImage?.imageId)
   const usesStyleReferenceForActivePlan = styleReferenceRequired && hasStyleReference
   const effectiveReferenceCount = inputImages.length + (usesStyleReferenceForActivePlan && selectedStyleImage?.imageId && !inputImages.some((image) => image.id === selectedStyleImage.imageId) ? 1 : 0)
@@ -470,31 +474,23 @@ export default function AmazonPlanner() {
   const activePrompt = plannerMode === 'aplus'
     ? selectedAPlusPlan ? buildAmazonAPlusPlanPrompt({
       ...selectedAPlusPlan,
+      targetSize,
       seriesStyleGuide: activeSeriesStyleGuide,
       styleReferenceAttached: usesStyleReferenceForActivePlan,
       styleDensityMode,
       selectedVisualStyle: usesStyleReferenceForActivePlan ? selectedVisualStyle : null,
     }) : ''
-    : isClothingModelPlanSelected ? buildAmazonPlanPrompt({
-      prompt: clothingModelPlan.prompt,
-      negativePrompt: clothingModelPlan.negativePrompt,
-      seriesStyleGuide: null,
-      styleReferenceAttached: false,
-      styleDensityMode,
-      selectedVisualStyle: null,
-    })
     : selectedPlan ? buildAmazonPlanPrompt({
       ...selectedPlan,
-      seriesStyleGuide: isMainListingPlan ? null : activeSeriesStyleGuide,
+      targetSize,
+      seriesStyleGuide: isMainListingPlan || isSelectedClothingModelPlan ? null : activeSeriesStyleGuide,
       styleReferenceAttached: usesStyleReferenceForActivePlan,
       styleDensityMode,
       selectedVisualStyle: usesStyleReferenceForActivePlan ? selectedVisualStyle : null,
     }) : ''
   const activePlanMarkdown = plannerMode === 'aplus'
     ? selectedAPlusPlan?.planMarkdown ?? ''
-    : isClothingModelPlanSelected
-      ? clothingModelPlan.planMarkdown
-      : selectedPlan?.planMarkdown ?? ''
+    : selectedPlan?.planMarkdown ?? ''
   const activePlanPreview = activePlanMarkdown
     ? [
         activePlanMarkdown,
@@ -507,23 +503,19 @@ export default function AmazonPlanner() {
   const plannerProfileValidation = plannerProfile ? validateApiProfile(plannerProfile) : '未选择支持 Chat Completions 或 Responses API 的 AI生成提示词配置'
   const plannerApiLabel = plannerProfile?.apiMode === 'chat' ? 'Chat Completions' : 'Responses API'
   const plannerUsesOfficialDeepSeek = plannerProfile ? isOfficialDeepSeekPlannerProfile(plannerProfile) : false
-  const listingTargetSize = resolution === '4k' ? '4096x4096' : '2048x2048'
-  const targetSize = isClothingModelPlanSelected ? CLOTHING_MODEL_SIZE : plannerMode === 'aplus' && selectedAPlusPlan ? selectedAPlusPlan.generationSize : listingTargetSize
   const generationParamLabel = `${DEFAULT_PARAMS.output_format.toUpperCase()} / ${DEFAULT_PARAMS.quality} / 压缩率${DEFAULT_PARAMS.output_compression}`
   const listingTextTokenEstimate = useMemo(() => estimateTextTokens(listingText), [listingText])
-  const visiblePlanCount = plannerMode === 'aplus' ? aPlusPlansWithSizes.length : imagePlans.length + (imagePlans.length > 0 ? 1 : 0)
+  const visiblePlanCount = plannerMode === 'aplus' ? aPlusPlansWithSizes.length : imagePlans.length
   const visiblePlanIndex = plannerMode === 'aplus'
     ? selectedAPlusPlanIndex
-    : isClothingModelPlanSelected
-      ? imagePlans.length
-      : selectedPlanIndex
-  const actionSlot = plannerMode === 'aplus' ? selectedAPlusPlan?.slot : isClothingModelPlanSelected ? CLOTHING_MODEL_SLOT : selectedPlan?.slot
-  const actionLabel = plannerMode === 'aplus' ? selectedAPlusPlan?.label : isClothingModelPlanSelected ? CLOTHING_MODEL_LABEL : selectedPlan?.label
+    : selectedPlanIndex
+  const actionSlot = plannerMode === 'aplus' ? selectedAPlusPlan?.slot : selectedPlan?.slot
+  const actionLabel = plannerMode === 'aplus' ? selectedAPlusPlan?.label : selectedPlan?.label
   const showStickyActions = plannerMode === 'aplus' ? aPlusPlansWithSizes.length > 0 : imagePlans.length > 0
   const actionDisabled = plannerMode === 'aplus' ? !selectedAPlusPlan : !activePrompt.trim()
   const submitDisabled = actionDisabled || (styleReferenceRequired && !hasStyleReference) || styleReferenceLimitExceeded
   const hasPlanOptions = visiblePlanCount > 0
-  const hasSelectedPlan = plannerMode === 'aplus' ? Boolean(selectedAPlusPlan) : Boolean(selectedPlan || isClothingModelPlanSelected)
+  const hasSelectedPlan = plannerMode === 'aplus' ? Boolean(selectedAPlusPlan) : Boolean(selectedPlan)
   const canGoPrev = visiblePlanCount > 0 && visiblePlanIndex != null && visiblePlanIndex > 0
   const canGoNext = visiblePlanCount > 0 && visiblePlanIndex != null && visiblePlanIndex < visiblePlanCount - 1
   const actionPositionLabel = visiblePlanCount > 0 && visiblePlanIndex != null
@@ -531,12 +523,11 @@ export default function AmazonPlanner() {
     : plannerMode === 'aplus'
       ? `${aPlusSpecs.length} 个待策划模块`
       : '未选择'
-  const currentActionKey = isClothingModelPlanSelected ? CLOTHING_MODEL_ACTION_KEY : getPlannerActionKey(plannerMode, visiblePlanIndex, actionSlot)
+  const currentActionKey = getPlannerActionKey(plannerMode, visiblePlanIndex, actionSlot)
   const currentActionProgress = currentActionKey ? actionProgress[currentActionKey] ?? null : null
-  const clothingModelActionProgress = actionProgress[CLOTHING_MODEL_ACTION_KEY] ?? null
   const currentActionFilled = currentActionProgress === 'filled' || currentActionProgress === 'submitted'
   const currentActionSubmitted = currentActionProgress === 'submitted'
-  const actionKindLabel = plannerMode === 'aplus' ? '模块' : isMainListingPlan ? '主图' : '图片'
+  const actionKindLabel = plannerMode === 'aplus' ? '模块' : isSelectedClothingModelPlan ? '模特主图' : isMainListingPlan ? '主图' : '图片'
   const actionGuidance = !hasSelectedPlan
     ? plannerMode === 'aplus' ? '先选择一个 A+ 模块' : '先选择一个图片位'
     : currentActionSubmitted
@@ -548,6 +539,10 @@ export default function AmazonPlanner() {
     ? hasStyleReference
       ? 'MAIN 主图不附加风格参考图；附图和 A+ 会使用已选风格。'
       : 'MAIN 主图不附加风格参考图；附图和 A+ 可选择风格参考。'
+    : isSelectedClothingModelPlan
+      ? hasStyleReference
+        ? 'MODEL 白底模特主图不附加隐藏风格参考图；它只使用产品图和模特参考图。'
+        : 'MODEL 白底模特主图不附加隐藏风格参考图；建议上传产品图和模特姿势参考图。'
     : ''
   const actionProgressSteps = [
     {
@@ -570,7 +565,9 @@ export default function AmazonPlanner() {
   const hasUsablePlannerProfile = Boolean(plannerProfile && !plannerProfileValidation)
   const seriesStyleReferenceNeeded = plannerMode === 'aplus'
     ? hasPlanOptions
-    : imagePlans.some((plan) => !isAmazonListingMainSlot(plan.slot))
+    : hasSelectedPlan
+      ? styleReferenceRequired
+      : imagePlans.some((plan) => !isAmazonListingMainSlot(plan.slot) && !isClothingModelSlot(plan.slot))
   const guideState: PlannerGuideState = !hasUsablePlannerProfile
     ? {
         target: 'planner-api',
@@ -612,7 +609,14 @@ export default function AmazonPlanner() {
   const actionBarGuideActive = guideState.target === 'action-bar'
   const checks = plannerMode === 'aplus'
     ? getAmazonAPlusComplianceChecks(draft, selectedAPlusPlan, aPlusType, inputImages.length, hasStyleReference)
-    : getAmazonListingPlannerChecks(draft, targetSize, inputImages.length, hasStyleReference, styleReferenceRequired)
+    : getAmazonListingPlannerChecks(
+      draft,
+      targetSize,
+      inputImages.length,
+      hasStyleReference,
+      styleReferenceRequired,
+      isSelectedClothingModelPlan ? 'MODEL 白底模特主图不使用隐藏风格参考' : undefined,
+    )
   const atImageLimit = inputImages.length >= API_MAX_IMAGES
 
   useEffect(() => {
@@ -672,7 +676,11 @@ export default function AmazonPlanner() {
     let cancelled = false
     getAllAmazonPlannerSessions()
       .then((sessions) => {
-        if (!cancelled) setPlannerSessions(sortPlannerSessions(sessions))
+        if (!cancelled) {
+          setPlannerSessions(sortPlannerSessions(
+            sessions.filter((session) => isPlannerSessionInWorkspace(session, workspaceModule)),
+          ))
+        }
       })
       .catch((err) => {
         if (!cancelled) showToast(`策划历史加载失败：${err instanceof Error ? err.message : String(err)}`, 'error')
@@ -680,7 +688,7 @@ export default function AmazonPlanner() {
     return () => {
       cancelled = true
     }
-  }, [showToast])
+  }, [showToast, workspaceModule])
 
   useEffect(() => {
     return () => {
@@ -723,6 +731,7 @@ export default function AmazonPlanner() {
   }, [customStyleReferences])
 
   const upsertPlannerSessionList = (session: AmazonPlannerSession) => {
+    if (!isPlannerSessionInWorkspace(session, workspaceModule)) return
     setPlannerSessions((current) => sortPlannerSessions([
       session,
       ...current.filter((item) => item.id !== session.id),
@@ -738,10 +747,15 @@ export default function AmazonPlanner() {
     const hasOverride = (key: keyof AmazonPlannerSession) => Object.prototype.hasOwnProperty.call(overrides, key)
     return {
       id: targetSessionId ?? createPlannerSessionId(),
+      workspaceModule: overrides.workspaceModule ?? workspaceModule,
       title: overrides.title ?? getPlannerSessionTitle(snapshotDraft, snapshotListingText),
       mode: overrides.mode ?? plannerMode,
       aPlusType: overrides.aPlusType ?? aPlusType,
       resolution: overrides.resolution ?? resolution,
+      listingImageCount: overrides.listingImageCount ?? listingImageCount,
+      aPlusModuleSpecs: hasOverride('aPlusModuleSpecs')
+        ? overrides.aPlusModuleSpecs
+        : getAPlusModuleSpecsForSession(aPlusModuleSpecsByType),
       listingText: snapshotListingText,
       referenceImageIds: overrides.referenceImageIds ?? inputImages.map((image) => image.id),
       draft: overrides.draft ?? toSessionDraft(draft),
@@ -782,31 +796,95 @@ export default function AmazonPlanner() {
     })
   }
 
+  const changeListingImageCount = (value: string | number) => {
+    const nextCount = normalizeListingImageCount(value)
+    if (nextCount === listingImageCount) return
+    const nextSeriesStyleGuides = { ...seriesStyleGuides, listing: '' }
+    setListingImageCount(nextCount)
+    setImagePlans([])
+    setSelectedPlanIndex(null)
+    setSeriesStyleGuides(nextSeriesStyleGuides)
+    setActionProgress({})
+    updateCurrentPlannerSession({
+      listingImageCount: nextCount,
+      seriesStyleGuides: nextSeriesStyleGuides,
+      imagePlans: [],
+      selectedPlanIndex: null,
+    })
+  }
+
+  const updateCurrentAPlusModuleSpecs = (nextSpecs: AmazonAPlusModuleSpec[]) => {
+    const normalizedSpecs = normalizeAPlusModuleSpecs(aPlusType, nextSpecs)
+    const nextByType: APlusModuleSpecsByType = { ...aPlusModuleSpecsByType }
+    if (areAPlusModuleSpecsEquivalent(normalizedSpecs, getAPlusModuleSpecs(aPlusType))) delete nextByType[aPlusType]
+    else nextByType[aPlusType] = normalizedSpecs
+    setAPlusModuleSpecsByType(nextByType)
+    updateCurrentPlannerSession({
+      aPlusModuleSpecs: getAPlusModuleSpecsForSession(nextByType),
+    })
+  }
+
+  const addAPlusModuleAfter = (index: number) => {
+    if (isPlanning || aPlusPlans.length > 0 || aPlusSpecs.length >= MAX_A_PLUS_MODULE_COUNT) return
+    updateCurrentAPlusModuleSpecs(insertAPlusModuleSpecAfter(aPlusType, aPlusSpecs, index))
+  }
+
+  const removeAPlusModuleAt = (index: number) => {
+    if (isPlanning || aPlusPlans.length > 0 || aPlusSpecs.length <= MIN_A_PLUS_MODULE_COUNT) return
+    updateCurrentAPlusModuleSpecs(removeAPlusModuleSpecAt(aPlusType, aPlusSpecs, index))
+  }
+
+  const restoreDefaultAPlusModules = () => {
+    if (isPlanning || aPlusPlans.length > 0 || aPlusSpecsAreDefault) return
+    updateCurrentAPlusModuleSpecs(getAPlusModuleSpecs(aPlusType))
+  }
+
+  const upsertClothingModelPlan = () => {
+    if (!isClothingWorkspace) return
+    const nextDraft: AmazonPromptDraft = { ...draft, kind: 'main' }
+    const nextPlan = buildClothingModelPlan(nextDraft, {
+      modelType: clothingModelType,
+      angle: clothingModelAngle,
+      armPose: clothingModelArmPose,
+    })
+    const existingIndex = imagePlans.findIndex((plan) => isClothingModelSlot(plan.slot))
+    const nextImagePlans = existingIndex >= 0
+      ? imagePlans.map((plan, index) => index === existingIndex ? nextPlan : plan)
+      : [nextPlan, ...imagePlans]
+    const nextSelectedPlanIndex = existingIndex >= 0 ? existingIndex : 0
+
+    setDraft(nextDraft)
+    setPlannerMode('listing')
+    setImagePlans(nextImagePlans)
+    setAPlusPlans([])
+    setSelectedPlanIndex(nextSelectedPlanIndex)
+    setSelectedAPlusPlanIndex(null)
+    setActionProgress({})
+    setStylePreview(null)
+    setStyleError('')
+
+    void savePlannerSession({
+      id: currentPlannerSessionId ?? createPlannerSessionId(),
+      workspaceModule,
+      mode: 'listing',
+      listingImageCount,
+      draft: toSessionDraft(nextDraft),
+      imagePlans: nextImagePlans,
+      aPlusPlans: [],
+      selectedPlanIndex: nextSelectedPlanIndex,
+      selectedAPlusPlanIndex: null,
+    }).catch((err) => {
+      showToast(`策划历史保存失败：${err instanceof Error ? err.message : String(err)}`, 'error')
+    })
+    showToast(existingIndex >= 0 ? '已更新 MODEL 白底模特主图' : '已加入 MODEL 白底模特主图', 'success')
+  }
+
   const markActionProgress = (key: string, progress: PlannerActionProgress) => {
     if (!key) return
     setActionProgress((current) => ({
       ...current,
       [key]: progress,
     }))
-  }
-
-  const clearClothingModelProgress = () => {
-    setActionProgress((current) => {
-      if (!current[CLOTHING_MODEL_ACTION_KEY]) return current
-      const next = { ...current }
-      delete next[CLOTHING_MODEL_ACTION_KEY]
-      return next
-    })
-  }
-
-  const changeClothingModelSkinTone = (value: ClothingModelSkinTone) => {
-    setClothingModelSkinTone(value)
-    clearClothingModelProgress()
-  }
-
-  const changeClothingModelPose = (value: ClothingModelPose) => {
-    setClothingModelPose(value)
-    clearClothingModelProgress()
   }
 
   const applyPrompt = (options: { requireStyle?: boolean } = {}) => {
@@ -833,9 +911,10 @@ export default function AmazonPlanner() {
       mode: 'prompt-match',
       prompt: activePrompt,
       category: {
+        workspaceModule,
         productTitle: draft.productTitle.trim(),
         workflow: plannerMode === 'aplus' ? 'amazon-aplus' : 'amazon-listing',
-        amazonSlot: plannerMode === 'aplus' ? selectedAPlusPlan?.slot : isClothingModelPlanSelected ? CLOTHING_MODEL_SLOT : selectedPlan?.slot,
+        amazonSlot: plannerMode === 'aplus' ? selectedAPlusPlan?.slot : selectedPlan?.slot,
         ...(plannerMode === 'aplus' ? { aPlusType } : {}),
         ...(usesStyleReferenceForActivePlan && selectedStyleImage?.imageId ? { styleReferenceImageId: selectedStyleImage.imageId } : {}),
       },
@@ -848,7 +927,7 @@ export default function AmazonPlanner() {
       n: 1,
     })
     markActionProgress(currentActionKey, 'filled')
-    showToast(isClothingModelPlanSelected ? '已填入服装无头模特白底图提示词' : plannerMode === 'aplus' ? '已填入 A+ 图片提示词' : '已填入亚马逊图片提示词', 'success')
+    showToast(plannerMode === 'aplus' ? '已填入 A+ 图片提示词' : '已填入亚马逊图片提示词', 'success')
     return true
   }
 
@@ -1172,7 +1251,6 @@ export default function AmazonPlanner() {
       setSelectedPlanIndex(nextSelectedPlanIndex)
       setSelectedAPlusPlanIndex(null)
     }
-    setSelectedListingSpecialPlan(null)
     setSeriesStyleGuides(nextSeriesStyleGuides)
     setSelectedStylePresetId(DEFAULT_STYLE_PRESET_ID)
     setSelectedStyleReference(null)
@@ -1182,7 +1260,10 @@ export default function AmazonPlanner() {
     setActionProgress({})
     void savePlannerSession({
       id: createPlannerSessionId(),
+      workspaceModule,
       mode: result.mode,
+      listingImageCount,
+      aPlusModuleSpecs: getAPlusModuleSpecsForSession(aPlusModuleSpecsByType),
       draft: toSessionDraft(nextDraft),
       seriesStyleGuides: nextSeriesStyleGuides,
       styleCandidates: [],
@@ -1255,6 +1336,8 @@ export default function AmazonPlanner() {
         referenceImageDataUrls: referencePayload.dataUrls,
         mode: plannerMode,
         aPlusType,
+        listingImageCount,
+        aPlusModuleSpecs: aPlusSpecs,
         aPlusGenerationTier: resolutionTier,
         signal: controller.signal,
       })
@@ -1288,7 +1371,6 @@ export default function AmazonPlanner() {
 
   const selectPlan = (index: number) => {
     const plan = imagePlans[index]
-    setSelectedListingSpecialPlan(null)
     setSelectedPlanIndex(plan ? index : null)
     if (plan) {
       setDraft((current) => plan.kind ? { ...current, kind: plan.kind } : current)
@@ -1301,22 +1383,14 @@ export default function AmazonPlanner() {
 
   const selectAPlusPlan = (index: number) => {
     const plan = aPlusPlansWithSizes[index]
-    setSelectedListingSpecialPlan(null)
     setSelectedAPlusPlanIndex(plan ? index : null)
     updateCurrentPlannerSession({
       selectedAPlusPlanIndex: plan ? index : null,
     })
   }
 
-  const selectClothingModelPlan = () => {
-    setSelectedListingSpecialPlan('clothing-model')
-    setSelectedPlanIndex(null)
-    setDraft((current) => current.kind === 'main' ? current : { ...current, kind: 'main' })
-  }
-
   const selectVisiblePlan = (index: number) => {
     if (plannerMode === 'aplus') selectAPlusPlan(index)
-    else if (index === imagePlans.length) selectClothingModelPlan()
     else selectPlan(index)
   }
 
@@ -1331,7 +1405,6 @@ export default function AmazonPlanner() {
     setPlannerMode(mode)
     setStylePreview(null)
     setStyleError('')
-    setSelectedListingSpecialPlan(null)
     setActionProgress({})
   }
 
@@ -1351,6 +1424,8 @@ export default function AmazonPlanner() {
 
   const clearListingPlan = () => {
     setListingText('')
+    setListingImageCount(DEFAULT_LISTING_IMAGE_COUNT)
+    setAPlusModuleSpecsByType({})
     setImagePlans([])
     setAPlusPlans([])
     setSeriesStyleGuides({ listing: '', aplus: '' })
@@ -1361,9 +1436,6 @@ export default function AmazonPlanner() {
     setStyleError('')
     setSelectedPlanIndex(null)
     setSelectedAPlusPlanIndex(null)
-    setSelectedListingSpecialPlan(null)
-    setClothingModelSkinTone('white')
-    setClothingModelPose('front-hands-waist')
     setPlannerError('')
     setCurrentPlannerSessionId(null)
     setActionProgress({})
@@ -1477,9 +1549,14 @@ export default function AmazonPlanner() {
       }
     }
 
+    const restoredListingImageCount = getSessionListingImageCount(session)
+    const restoredAPlusModuleSpecsByType = getSessionAPlusModuleSpecsByType(session)
+
     setPlannerMode(session.mode)
     setAPlusType(session.aPlusType)
     setResolution(session.resolution)
+    setListingImageCount(restoredListingImageCount)
+    setAPlusModuleSpecsByType(restoredAPlusModuleSpecsByType)
     setListingText(session.listingText)
     setInputImages(restoredReferences)
     setDraft(fromSessionDraft(session.draft))
@@ -1492,7 +1569,6 @@ export default function AmazonPlanner() {
     setAPlusPlans(session.aPlusPlans as AmazonAPlusPlan[])
     setSelectedPlanIndex(session.selectedPlanIndex != null && session.imagePlans[session.selectedPlanIndex] ? session.selectedPlanIndex : null)
     setSelectedAPlusPlanIndex(session.selectedAPlusPlanIndex != null && session.aPlusPlans[session.selectedAPlusPlanIndex] ? session.selectedAPlusPlanIndex : null)
-    setSelectedListingSpecialPlan(null)
     setPlannerError('')
     setStyleError(restoredStyleError)
     setCurrentPlannerSessionId(session.id)
@@ -1500,6 +1576,9 @@ export default function AmazonPlanner() {
     setActionProgress({})
     const restoredSession = {
       ...session,
+      workspaceModule,
+      listingImageCount: restoredListingImageCount,
+      aPlusModuleSpecs: getAPlusModuleSpecsForSession(restoredAPlusModuleSpecsByType),
       selectedStylePresetId: restoredStyleReference ? restoredStyleReference.presetId : nextStylePresetId,
       selectedStyleReferenceImageId: restoredStyleReference?.imageId ?? null,
       selectedCustomStyleReferenceId: restoredCustomStyleReference?.id ?? null,
@@ -1597,9 +1676,16 @@ export default function AmazonPlanner() {
       <div className="border-b border-gray-200 px-4 py-4 dark:border-white/[0.08] sm:px-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-50">电商图像策划工作区</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-50">电商图像策划工作区</h2>
+              <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-400/10 dark:text-blue-200">
+                {workspace.label}
+              </span>
+            </div>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
               <span>AEPI03-Stardust Memory</span>
+              <span className="h-1 w-1 rounded-full bg-gray-300 dark:bg-gray-600" />
+              <span>{workspace.title}</span>
               <span className="h-1 w-1 rounded-full bg-gray-300 dark:bg-gray-600" />
               <span>2K / 4K</span>
               <span className="h-1 w-1 rounded-full bg-gray-300 dark:bg-gray-600" />
@@ -1622,6 +1708,20 @@ export default function AmazonPlanner() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {plannerMode === 'listing' && (
+              <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-600 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-300">
+                <span className="text-xs text-gray-400 dark:text-gray-500">图片数</span>
+                <select
+                  value={listingImageCount}
+                  onChange={(event) => changeListingImageCount(event.target.value)}
+                  className="h-7 rounded-md border border-gray-200 bg-gray-50 px-2 text-sm font-semibold text-gray-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-white/[0.08] dark:bg-white/[0.06] dark:text-gray-100"
+                >
+                  {LISTING_IMAGE_COUNT_OPTIONS.map((count) => (
+                    <option key={count} value={count}>{count} 张</option>
+                  ))}
+                </select>
+              </label>
+            )}
             <div className="inline-flex rounded-xl border border-gray-200 bg-gray-100 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
               {(['2k', '4k'] as const).map((item) => (
                 <button
@@ -1731,7 +1831,7 @@ export default function AmazonPlanner() {
                 <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                   {plannerMode === 'aplus'
                     ? '粘贴标题、五点描述或品牌说明，生成普通A+ / 标准A+ / 高级A+ / 手机A+模块编排和英文提示词。'
-                    : '根据标题、五点描述或产品说明，拆解产品基础信息、核心卖点、适用人群与使用场景；若未提供人群或场景，系统会推断最高概率结果后再生成提示词。'}
+                    : `根据标题、五点描述或产品说明，拆解产品基础信息、核心卖点、适用人群与使用场景，并生成 ${listingSlotRange} 的逐张提示词。`}
                 </div>
               </div>
               <div className="rounded-lg bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-500 dark:bg-white/[0.06] dark:text-gray-400">
@@ -1779,6 +1879,88 @@ export default function AmazonPlanner() {
                 <span>用于预估 AI 生成提示词输入成本，实际用量以接口返回为准。</span>
               </div>
             </label>
+            {isClothingWorkspace && plannerMode === 'listing' && (
+              <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3 dark:border-blue-400/20 dark:bg-blue-400/10">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-md bg-blue-600 px-2 py-0.5 text-[11px] font-bold text-white">MODEL</span>
+                      <span className="text-sm font-semibold text-blue-950 dark:text-blue-100">白底模特主图</span>
+                      <span className="rounded-md bg-white px-2 py-0.5 text-[11px] font-semibold text-blue-700 shadow-sm dark:bg-white/[0.08] dark:text-blue-100">
+                        {CLOTHING_MODEL_TARGET_SIZE}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-xs leading-relaxed text-blue-800/80 dark:text-blue-100/80">
+                      只在服装版生效。上传的模特参考图只用于人物位置、裁切比例和姿势，不复制人物身份、脸、发型、纹身、首饰或包袋。
+                    </div>
+                  </div>
+                  {hasClothingModelPlan && (
+                    <span className="shrink-0 rounded-lg bg-emerald-100 px-2 py-1 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-200">
+                      已加入逐张策划
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3 grid gap-3 xl:grid-cols-3">
+                  <div>
+                    <div className="mb-1 text-[11px] font-semibold text-blue-800 dark:text-blue-100">模特类型</div>
+                    <div className="grid grid-cols-2 gap-1 rounded-lg border border-blue-100 bg-white p-1 dark:border-blue-300/20 dark:bg-gray-950">
+                      {CLOTHING_MODEL_TYPE_OPTIONS.map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => setClothingModelType(option)}
+                          className={`h-8 rounded-md px-2 text-xs font-semibold transition ${clothingModelType === option ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-blue-50 hover:text-blue-700 dark:text-gray-300 dark:hover:bg-blue-400/10 dark:hover:text-blue-100'}`}
+                        >
+                          {getClothingModelTypeLabel(option)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-1 text-[11px] font-semibold text-blue-800 dark:text-blue-100">角度</div>
+                    <div className="grid grid-cols-2 gap-1 rounded-lg border border-blue-100 bg-white p-1 dark:border-blue-300/20 dark:bg-gray-950">
+                      {CLOTHING_MODEL_ANGLE_OPTIONS.map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => setClothingModelAngle(option)}
+                          className={`h-8 rounded-md px-2 text-xs font-semibold transition ${clothingModelAngle === option ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-blue-50 hover:text-blue-700 dark:text-gray-300 dark:hover:bg-blue-400/10 dark:hover:text-blue-100'}`}
+                        >
+                          {getClothingModelAngleLabel(option)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-1 text-[11px] font-semibold text-blue-800 dark:text-blue-100">手臂姿势</div>
+                    <div className="grid grid-cols-2 gap-1 rounded-lg border border-blue-100 bg-white p-1 dark:border-blue-300/20 dark:bg-gray-950">
+                      {CLOTHING_MODEL_ARM_POSE_OPTIONS.map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => setClothingModelArmPose(option)}
+                          className={`h-8 rounded-md px-2 text-xs font-semibold transition ${clothingModelArmPose === option ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-blue-50 hover:text-blue-700 dark:text-gray-300 dark:hover:bg-blue-400/10 dark:hover:text-blue-100'}`}
+                        >
+                          {getClothingModelArmPoseLabel(option)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-[11px] leading-relaxed text-blue-800/80 dark:text-blue-100/75">
+                    建议同时上传商品实拍图和模特白底构图参考图；生成时不会添加卖点、图标、Logo、文字或场景道具。
+                  </div>
+                  <button
+                    type="button"
+                    onClick={upsertClothingModelPlan}
+                    className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white transition hover:bg-blue-500"
+                  >
+                    {hasClothingModelPlan ? '更新 MODEL' : '加入 MODEL'}
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
               <div className={`rounded-xl border px-3 py-2 transition ${guideState.target === 'planner-api' ? 'border-blue-300 bg-blue-50 text-blue-800 ring-2 ring-blue-500/15 dark:border-blue-400/60 dark:bg-blue-500/10 dark:text-blue-100' : plannerProfile && !plannerProfileValidation ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200' : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200'}`}>
                 <div className="text-xs font-semibold">AI生成提示词配置</div>
@@ -2399,8 +2581,8 @@ export default function AmazonPlanner() {
               )}
               {selectedStyleImage?.imageId && selectedStyleLabel && (
                 <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs leading-relaxed text-violet-800 dark:border-violet-300/20 dark:bg-violet-400/10 dark:text-violet-200">
-                  {isMainListingPlan
-                    ? `已选择「${selectedStyleLabel}」，但当前 MAIN 主图不会附加这张风格参考图；切换到附图或 A+ 时才会作为隐藏参考。`
+                  {!styleReferenceRequired
+                    ? `已选择「${selectedStyleLabel}」，但当前 ${isSelectedClothingModelPlan ? 'MODEL 白底模特主图' : 'MAIN 主图'} 不会附加这张风格参考图；切换到附图或 A+ 时才会作为隐藏参考。`
                     : `已选择「${selectedStyleLabel}」。正式生成时会隐藏附加这张风格参考图作为最后一张参考图，用于统一字体感觉、色板、光影、材质和标注样式，不复制其中占位文字、固定版式或产品摆放。`}
                 </div>
               )}
@@ -2426,71 +2608,8 @@ export default function AmazonPlanner() {
                   </div>
                 </div>
                 <span className="shrink-0 rounded-lg bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500 dark:bg-white/[0.06] dark:text-gray-400">
-                  {imagePlans.length} 张 + 服装主图
+                  {imagePlans.length} 张
                 </span>
-              </div>
-              <div className={`mb-3 rounded-xl border p-3 transition ${isClothingModelPlanSelected ? 'border-blue-400 bg-blue-50 ring-2 ring-blue-500/15 dark:border-blue-400/70 dark:bg-blue-500/10' : 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-400/20 dark:bg-emerald-400/10'}`}>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${isClothingModelPlanSelected ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white'}`}>
-                        {CLOTHING_MODEL_SLOT}
-                      </span>
-                      <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{CLOTHING_MODEL_LABEL}</span>
-                      <span className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-white/[0.08] dark:text-emerald-200">服装专用</span>
-                      {isClothingModelPlanSelected && (
-                        <span className="rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">当前</span>
-                      )}
-                      {clothingModelActionProgress && (
-                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${clothingModelActionProgress === 'submitted' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200'}`}>
-                          {clothingModelActionProgress === 'submitted' ? '已提交' : '已填入'}
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-gray-300">
-                      生成亚马逊认可的无头成人模特主图：纯白背景、{CLOTHING_MODEL_SIZE}、按上传参考图做半身到大腿上方构图模板，无文字水印和生活场景。
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={selectClothingModelPlan}
-                    className={`inline-flex h-8 shrink-0 items-center justify-center rounded-lg px-3 text-xs font-semibold transition ${isClothingModelPlanSelected ? 'bg-blue-600 text-white' : 'bg-gray-900 text-white hover:bg-gray-700 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200'}`}
-                  >
-                    {isClothingModelPlanSelected ? '已选用' : '选用'}
-                  </button>
-                </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <div>
-                    <span className="mb-1 block text-[11px] font-medium text-gray-500 dark:text-gray-400">模特类型</span>
-                    <div className="grid grid-cols-2 gap-1 rounded-lg border border-gray-200 bg-white p-1 dark:border-white/[0.08] dark:bg-gray-950">
-                      {CLOTHING_MODEL_SKIN_OPTIONS.map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => changeClothingModelSkinTone(option.value)}
-                          className={`h-7 rounded-md px-2 text-xs font-semibold transition ${clothingModelSkinTone === option.value ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.06] dark:hover:text-gray-100'}`}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <label>
-                    <span className="mb-1 block text-[11px] font-medium text-gray-500 dark:text-gray-400">姿势</span>
-                    <select
-                      value={clothingModelPose}
-                      onChange={(event) => changeClothingModelPose(event.target.value as ClothingModelPose)}
-                      className="h-9 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs font-medium text-gray-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-100"
-                    >
-                      {CLOTHING_MODEL_POSE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                <div className="mt-2 line-clamp-2 rounded-lg bg-white/70 px-2 py-1 text-[11px] leading-relaxed text-gray-500 dark:bg-white/[0.05] dark:text-gray-300">
-                  Negative：{clothingModelPlan.negativePrompt}
-                </div>
               </div>
               <div className={PLAN_LIST_CLASS}>
                 {imagePlans.map((plan, index) => {
@@ -2598,26 +2717,64 @@ export default function AmazonPlanner() {
                 <div>
                   <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">A+ 模块编排</div>
                   <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                    当前选择 {getAPlusContentTypeLabel(aPlusType)}，点击 AI生成提示词A+ 后生成逐模块方案。
+                    当前选择 {getAPlusContentTypeLabel(aPlusType)}，可先调整模块数量，再点击 AI生成提示词A+。
                   </div>
                 </div>
-                <span className="shrink-0 rounded-lg bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500 dark:bg-white/[0.06] dark:text-gray-400">
-                  {aPlusSpecs.length} 张
-                </span>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={restoreDefaultAPlusModules}
+                    disabled={isPlanning || aPlusSpecsAreDefault}
+                    title="恢复当前 A+ 类型默认模块"
+                    className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition ${!isPlanning && !aPlusSpecsAreDefault ? 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-white/[0.06] dark:hover:text-white' : 'cursor-not-allowed border-gray-100 bg-gray-100 text-gray-300 dark:border-white/[0.04] dark:bg-white/[0.04] dark:text-gray-600'}`}
+                  >
+                    <RefreshIcon className="h-3.5 w-3.5" />
+                    恢复默认
+                  </button>
+                  <span className="rounded-lg bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500 dark:bg-white/[0.06] dark:text-gray-400">
+                    {aPlusSpecs.length} 张
+                  </span>
+                </div>
               </div>
               <div className={PLAN_LIST_CLASS}>
-                {aPlusSpecs.map((spec) => (
+                {aPlusSpecs.map((spec, index) => (
                   <div key={spec.slot} className="rounded-xl border border-dashed border-gray-200 bg-white px-3 py-2 dark:border-white/[0.08] dark:bg-gray-900">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-600 dark:bg-white/[0.08] dark:text-gray-300">
-                        {spec.slot}
-                      </span>
-                      <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{getAPlusModuleDisplayName(spec)}</span>
-                      <span className="text-xs text-gray-400">{getAPlusModuleEnglishName(spec)}</span>
-                    </div>
-                    <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
-                      上传 {getAPlusModuleUploadSize(spec)} · 生成 {getAPlusModuleGenerationSize(spec, resolutionTier)}
-                      {isAPlusTextModule(spec) ? ' · 含标题/正文' : ''}
+                    <div className="flex items-center gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-600 dark:bg-white/[0.08] dark:text-gray-300">
+                            {spec.slot}
+                          </span>
+                          <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{getAPlusModuleDisplayName(spec)}</span>
+                          <span className="text-xs text-gray-400">{getAPlusModuleEnglishName(spec)}</span>
+                        </div>
+                        <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                          上传 {getAPlusModuleUploadSize(spec)} · 生成 {getAPlusModuleGenerationSize(spec, resolutionTier)}
+                          {isAPlusTextModule(spec) ? ' · 含标题/正文' : ''}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => addAPlusModuleAfter(index)}
+                          disabled={isPlanning || aPlusSpecs.length >= MAX_A_PLUS_MODULE_COUNT}
+                          aria-label={`在 ${spec.slot} 后添加同尺寸 A+ 模块`}
+                          title={aPlusSpecs.length >= MAX_A_PLUS_MODULE_COUNT ? `最多 ${MAX_A_PLUS_MODULE_COUNT} 张` : '添加同尺寸模块'}
+                          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition ${!isPlanning && aPlusSpecs.length < MAX_A_PLUS_MODULE_COUNT ? 'border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200 dark:hover:bg-blue-400/20' : 'cursor-not-allowed border-gray-100 bg-gray-100 text-gray-300 dark:border-white/[0.04] dark:bg-white/[0.04] dark:text-gray-600'}`}
+                        >
+                          <PlusIcon className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeAPlusModuleAt(index)}
+                          disabled={isPlanning || aPlusSpecs.length <= MIN_A_PLUS_MODULE_COUNT}
+                          aria-label={`删除 ${spec.slot} A+ 模块`}
+                          title={aPlusSpecs.length <= MIN_A_PLUS_MODULE_COUNT ? `至少保留 ${MIN_A_PLUS_MODULE_COUNT} 张` : '删除模块'}
+                          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition ${!isPlanning && aPlusSpecs.length > MIN_A_PLUS_MODULE_COUNT ? 'border-red-100 bg-red-50 text-red-600 hover:bg-red-100 dark:border-red-400/20 dark:bg-red-400/10 dark:text-red-200 dark:hover:bg-red-400/20' : 'cursor-not-allowed border-gray-100 bg-gray-100 text-gray-300 dark:border-white/[0.04] dark:bg-white/[0.04] dark:text-gray-600'}`}
+                        >
+                          <TrashIcon className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}

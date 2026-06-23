@@ -34,6 +34,7 @@ describe('task history categories', () => {
     }))
 
     expect(category).toMatchObject({
+      workspaceModule: 'general',
       productTitle: 'Large Folding Umbrella',
       workflow: 'amazon-listing',
       amazonSlot: 'MAIN',
@@ -113,6 +114,48 @@ describe('task history categories', () => {
       filterWorkflow: 'amazon-listing',
       filterAspect: 'landscape',
     })).toBe(false)
+  })
+
+  it('keeps workspace history isolated while treating legacy tasks as general', () => {
+    const legacyGeneralRecord = task({
+      id: 'legacy-general',
+      category: {
+        productTitle: 'Large Folding Umbrella',
+        workflow: 'amazon-listing',
+      },
+    })
+    const clothingRecord = task({
+      id: 'clothing-record',
+      category: {
+        workspaceModule: 'clothing',
+        productTitle: 'Summer Shirt',
+        workflow: 'amazon-listing',
+      },
+    })
+
+    expect(matchesTaskHistoryFilters(legacyGeneralRecord, {
+      workspaceModule: 'general',
+      searchQuery: '',
+      filterStatus: 'all',
+      filterFavorite: false,
+      filterProductTitle: '',
+      filterWorkflow: 'all',
+      filterAspect: 'all',
+    })).toBe(true)
+
+    expect(matchesTaskHistoryFilters(clothingRecord, {
+      workspaceModule: 'general',
+      searchQuery: '',
+      filterStatus: 'all',
+      filterFavorite: false,
+      filterProductTitle: '',
+      filterWorkflow: 'all',
+      filterAspect: 'all',
+    })).toBe(false)
+
+    expect(getTaskProductFilterOptions([legacyGeneralRecord, clothingRecord], 'clothing')).toEqual([
+      expect.objectContaining({ label: 'Summer Shirt', count: 1 }),
+    ])
   })
 
   it('matches product filters after cleaning title punctuation and invisible characters', () => {

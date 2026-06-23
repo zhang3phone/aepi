@@ -54,7 +54,7 @@ import { orderInputImagesForMask } from './lib/mask'
 import { getChangedParams, normalizeParamsForSettings } from './lib/paramCompatibility'
 import { prepareReferenceImageAndMaskPayload } from './lib/referenceImagePayload'
 import { getTaskHistoryCategory } from './lib/taskHistory'
-import { isAmazonListingMainSlot } from './lib/listingPlanner'
+import { isAmazonListingMainSlot, isClothingModelSlot } from './lib/listingPlanner'
 import { formatImageSizeValue, getModelRequestImageSize, parseImageSizeValue } from './lib/size'
 import { reportGeneratedImages } from './lib/generationStats'
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate'
@@ -113,7 +113,7 @@ function isAmazonTaskWorkflow(
 function removeMainStyleReference(
   category: NonNullable<TaskRecord['category']>,
 ): NonNullable<TaskRecord['category']> {
-  if (category.workflow !== 'amazon-listing' || !isAmazonListingMainSlot(category.amazonSlot) || !category.styleReferenceImageId) return category
+  if (category.workflow !== 'amazon-listing' || (!isAmazonListingMainSlot(category.amazonSlot) && !isClothingModelSlot(category.amazonSlot)) || !category.styleReferenceImageId) return category
   const { styleReferenceImageId, ...nextCategory } = category
   return nextCategory
 }
@@ -121,7 +121,11 @@ function removeMainStyleReference(
 function createNextSubmitTaskCategory(task: TaskRecord): NonNullable<TaskRecord['category']> {
   const historyCategory = getTaskHistoryCategory(task)
   const workflow = task.category?.workflow ?? historyCategory.workflow
-  if (!isAmazonTaskWorkflow(workflow)) return { workflow: 'gallery' }
+  if (!isAmazonTaskWorkflow(workflow)) {
+    const category: NonNullable<TaskRecord['category']> = { workflow: 'gallery' }
+    if (task.category?.workspaceModule) category.workspaceModule = task.category.workspaceModule
+    return category
+  }
 
   const hasExplicitProductTitle = Boolean(
     task.category && Object.prototype.hasOwnProperty.call(task.category, 'productTitle'),
@@ -130,12 +134,14 @@ function createNextSubmitTaskCategory(task: TaskRecord): NonNullable<TaskRecord[
   const amazonSlot = task.category?.amazonSlot?.trim() || historyCategory.amazonSlot
   const aPlusType = task.category?.aPlusType ?? historyCategory.aPlusType
   const styleReferenceImageId = task.category?.styleReferenceImageId?.trim()
+  const workspaceModule = task.category?.workspaceModule ?? historyCategory.workspaceModule
   const category: NonNullable<TaskRecord['category']> = { workflow }
 
+  if (task.category?.workspaceModule) category.workspaceModule = workspaceModule
   if (hasExplicitProductTitle || productTitle) category.productTitle = productTitle
   if (amazonSlot) category.amazonSlot = amazonSlot
   if (workflow === 'amazon-aplus' && aPlusType) category.aPlusType = aPlusType
-  if (styleReferenceImageId && !(workflow === 'amazon-listing' && isAmazonListingMainSlot(amazonSlot))) {
+  if (styleReferenceImageId && !(workflow === 'amazon-listing' && (isAmazonListingMainSlot(amazonSlot) || isClothingModelSlot(amazonSlot)))) {
     category.styleReferenceImageId = styleReferenceImageId
   }
 

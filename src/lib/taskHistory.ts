@@ -1,4 +1,5 @@
-import type { HistoryAspectFilter, HistoryWorkflowFilter, TaskAspect, TaskRecord, TaskWorkflow } from '../types'
+import type { HistoryAspectFilter, HistoryWorkflowFilter, TaskAspect, TaskRecord, TaskWorkflow, WorkspaceModule } from '../types'
+import { getWorkspaceModuleLabel, normalizeWorkspaceModule } from './workspaceModules'
 
 export const ALL_PRODUCT_FILTER = ''
 export const UNCATEGORIZED_PRODUCT_FILTER = '__uncategorized_product__'
@@ -14,6 +15,7 @@ const OUTER_TITLE_WRAPPER_PATTERN = /^[\s"'`“”‘’「」『』《》（）
 const TRAILING_TITLE_NOISE_PATTERN = /(?:\s*(?:\.{2,}|…+|[.。!！?？,，;；:：、|/\\]+)\s*)+$/g
 
 export interface TaskHistoryCategory {
+  workspaceModule: WorkspaceModule
   productTitle: string
   workflow: TaskWorkflow
   aspect: TaskAspect
@@ -22,6 +24,7 @@ export interface TaskHistoryCategory {
 }
 
 export interface TaskHistoryFilters {
+  workspaceModule?: WorkspaceModule | 'all'
   searchQuery: string
   filterStatus: 'all' | 'running' | 'done' | 'error'
   filterFavorite: boolean
@@ -122,6 +125,7 @@ export function getTaskHistoryCategory(task: TaskRecord): TaskHistoryCategory {
   )
   const explicitProductTitle = cleanInferredProductTitle(task.category?.productTitle ?? '')
   return {
+    workspaceModule: normalizeWorkspaceModule(task.category?.workspaceModule),
     productTitle: hasExplicitProductTitle ? explicitProductTitle : inferProductTitleFromPrompt(task.prompt || ''),
     workflow: inferWorkflow(task),
     aspect: getTaskAspect(task),
@@ -156,11 +160,12 @@ export function getAspectLabel(aspect: TaskAspect) {
   }
 }
 
-export function getTaskProductFilterOptions(tasks: TaskRecord[]): ProductFilterOption[] {
+export function getTaskProductFilterOptions(tasks: TaskRecord[], workspaceModule: WorkspaceModule | 'all' = 'all'): ProductFilterOption[] {
   const productMap = new Map<string, ProductFilterOption>()
 
   for (const task of tasks) {
-    const { productTitle } = getTaskHistoryCategory(task)
+    const { productTitle, workspaceModule: taskWorkspaceModule } = getTaskHistoryCategory(task)
+    if (workspaceModule !== 'all' && taskWorkspaceModule !== workspaceModule) continue
     if (!productTitle) continue
 
     const key = normalizeProductTitle(productTitle)
@@ -191,6 +196,8 @@ export function matchesTaskHistoryFilters(task: TaskRecord, filters: TaskHistory
   if (filters.filterStatus !== 'all' && task.status !== filters.filterStatus) return false
 
   const category = getTaskHistoryCategory(task)
+  if (filters.workspaceModule && filters.workspaceModule !== 'all' && category.workspaceModule !== filters.workspaceModule) return false
+
   if (filters.filterProductTitle === UNCATEGORIZED_PRODUCT_FILTER) {
     if (category.productTitle) return false
   } else if (filters.filterProductTitle) {
@@ -210,6 +217,7 @@ export function matchesTaskHistoryFilters(task: TaskRecord, filters: TaskHistory
     category.productTitle,
     getWorkflowLabel(category.workflow),
     getAspectLabel(category.aspect),
+    getWorkspaceModuleLabel(category.workspaceModule),
     category.amazonSlot,
     category.aPlusType,
   ].join(' ').toLowerCase()

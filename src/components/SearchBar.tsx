@@ -7,11 +7,16 @@ import {
   matchesTaskHistoryFilters,
   normalizeProductTitle,
 } from '../lib/taskHistory'
-import type { HistoryAspectFilter, HistoryWorkflowFilter } from '../types'
+import { DEFAULT_WORKSPACE_MODULE } from '../lib/workspaceModules'
+import type { HistoryAspectFilter, HistoryWorkflowFilter, WorkspaceModule } from '../types'
 import Select from './Select'
 import { TrashIcon } from './icons'
 
-export default function SearchBar() {
+interface SearchBarProps {
+  workspaceModule?: WorkspaceModule
+}
+
+export default function SearchBar({ workspaceModule = DEFAULT_WORKSPACE_MODULE }: SearchBarProps) {
   const tasks = useStore((s) => s.tasks)
   const searchQuery = useStore((s) => s.searchQuery)
   const setSearchQuery = useStore((s) => s.setSearchQuery)
@@ -28,7 +33,7 @@ export default function SearchBar() {
   const setConfirmDialog = useStore((s) => s.setConfirmDialog)
 
   const productOptions = useMemo(() => {
-    const options = getTaskProductFilterOptions(tasks)
+    const options = getTaskProductFilterOptions(tasks, workspaceModule)
     const hasSelectedProduct = Boolean(
       filterProductTitle &&
       filterProductTitle !== UNCATEGORIZED_PRODUCT_FILTER &&
@@ -44,7 +49,7 @@ export default function SearchBar() {
       })),
       { label: '未识别商品', value: UNCATEGORIZED_PRODUCT_FILTER },
     ]
-  }, [filterProductTitle, tasks])
+  }, [filterProductTitle, tasks, workspaceModule])
 
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => matchesTaskHistoryFilters(task, {
@@ -54,8 +59,9 @@ export default function SearchBar() {
       filterProductTitle,
       filterWorkflow,
       filterAspect,
+      workspaceModule,
     }))
-  }, [tasks, searchQuery, filterStatus, filterFavorite, filterProductTitle, filterWorkflow, filterAspect])
+  }, [tasks, searchQuery, filterStatus, filterFavorite, filterProductTitle, filterWorkflow, filterAspect, workspaceModule])
 
   const hasActiveFilters = Boolean(
     searchQuery.trim() ||

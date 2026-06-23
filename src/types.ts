@@ -2,6 +2,7 @@
 
 export type ApiMode = 'images' | 'responses' | 'chat'
 export type AppMode = 'gallery' | 'agent'
+export type WorkspaceModule = 'general' | 'clothing'
 export type TaskWorkflow = 'amazon-listing' | 'amazon-aplus' | 'gallery' | 'agent' | 'unknown'
 export type TaskAspect = 'square' | 'landscape' | 'portrait'
 export type HistoryWorkflowFilter = 'all' | TaskWorkflow
@@ -212,6 +213,7 @@ export interface TaskRecord {
   agentToolAction?: 'generate' | 'edit' | 'auto' | string
   /** 历史筛选分类元数据；旧任务可为空并由前端推断 */
   category?: {
+    workspaceModule?: WorkspaceModule
     productTitle?: string
     workflow?: TaskWorkflow
     amazonSlot?: string
@@ -273,6 +275,17 @@ export interface AmazonPlannerSessionAPlusPlan {
   negativePrompt: string
 }
 
+export interface AmazonPlannerSessionAPlusModuleSpec {
+  contentType: 'standard' | 'standard-large' | 'premium' | 'mobile' | 'optional'
+  slot: string
+  label: string
+  displayLabel: string
+  moduleType: string
+  uploadWidth: number
+  uploadHeight: number
+  objective: string
+}
+
 export interface AmazonPlannerSessionStyleImage {
   candidateIndex: number
   imageId: string
@@ -301,10 +314,13 @@ export interface CustomStyleReference {
 
 export interface AmazonPlannerSession {
   id: string
+  workspaceModule?: WorkspaceModule
   title: string
   mode: 'listing' | 'aplus'
   aPlusType: 'standard' | 'standard-large' | 'premium' | 'mobile'
   resolution: '2k' | '4k'
+  listingImageCount?: number
+  aPlusModuleSpecs?: Partial<Record<'standard' | 'standard-large' | 'premium' | 'mobile', AmazonPlannerSessionAPlusModuleSpec[]>>
   listingText: string
   referenceImageIds: string[]
   draft: AmazonPlannerSessionDraft

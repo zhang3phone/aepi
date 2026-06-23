@@ -415,11 +415,13 @@ input[type="number"] {
 
 @media (min-width: 1024px) {
   :root {
-    --home-content-max-width: 80rem;
-    --home-content-half-width: 40rem;
-    --home-input-dock-width: 22rem;
-    --home-input-dock-reserve: 23.5rem;
-    --home-input-dock-reserve-half: 11.75rem;
+    --home-content-max-width: 93.75rem;
+    --home-content-half-width: 46.875rem;
+    --home-input-dock-width: 18rem;
+    --home-input-dock-reserve: 19.25rem;
+    --home-input-dock-reserve-half: 9.625rem;
+    --home-input-dock-collapsed-width: 3.5rem;
+    --home-input-dock-collapsed-reserve: 4.25rem;
     --home-input-dock-min-right: max(1.5rem, var(--safe-area-right));
     --home-input-dock-right: max(
       var(--home-input-dock-min-right),
@@ -431,17 +433,17 @@ input[type="number"] {
     padding-right: var(--home-input-dock-reserve);
   }
 
+  .home-input-dock-collapsed .home-main-with-dock {
+    padding-right: var(--home-input-dock-collapsed-reserve);
+  }
+
   .home-input-dock {
     right: var(--home-input-dock-right);
     width: var(--home-input-dock-width);
   }
-}
 
-@media (min-width: 1280px) {
-  :root {
-    --home-input-dock-width: 23rem;
-    --home-input-dock-reserve: 24.5rem;
-    --home-input-dock-reserve-half: 12.25rem;
+  .home-input-dock[data-dock-collapsed="true"] {
+    width: var(--home-input-dock-collapsed-width);
   }
 }
 

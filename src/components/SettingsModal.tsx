@@ -31,7 +31,7 @@ import { DEFAULT_STREAM_PARTIAL_IMAGES, type ApiProfile, type AppSettings, type 
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import { DEFAULT_DROPDOWN_MAX_HEIGHT, getDropdownMaxHeight } from '../lib/dropdown'
-import { APP_CHANGELOG } from '../changelog'
+import { APP_CHANGELOG, getAppVersionDate } from '../changelog'
 import { fetchGenerationStats, isGenerationStatsAvailable, type GenerationStatsSummary } from '../lib/generationStats'
 import Select from './Select'
 import { Checkbox } from './Checkbox'
@@ -332,6 +332,7 @@ const normalizeDraftSettings = (value: Partial<AppSettings> | unknown) =>
   normalizeSettings(value)
 
 export default function SettingsModal() {
+  const appVersionDate = getAppVersionDate(__APP_VERSION__)
   const showSettings = useStore((s) => s.showSettings)
   const settingsTabRequest = useStore((s) => s.settingsTabRequest)
   const setShowSettings = useStore((s) => s.setShowSettings)
@@ -1243,7 +1244,9 @@ export default function SettingsModal() {
             设置
           </h3>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-400 dark:text-gray-500 font-mono select-none">v{__APP_VERSION__}</span>
+            <span className="text-sm text-gray-400 dark:text-gray-500 font-mono select-none">
+              v{__APP_VERSION__}{appVersionDate ? ` · ${appVersionDate}` : ''}
+            </span>
             <button
               onClick={handleClose}
               className="rounded-full p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/[0.06] dark:hover:text-gray-200"
@@ -2135,7 +2138,7 @@ export default function SettingsModal() {
                       <h3 className="mt-1 text-lg font-bold text-gray-900 dark:text-gray-100">更新日志</h3>
                     </div>
                     <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-blue-600 shadow-sm ring-1 ring-blue-100 dark:bg-white/[0.06] dark:text-blue-300 dark:ring-blue-500/20">
-                      当前版本 v{__APP_VERSION__}
+                      当前版本 v{__APP_VERSION__}{appVersionDate ? ` · ${appVersionDate}` : ''}
                     </span>
                   </div>
                   <p className="mt-3 text-sm leading-6 text-gray-600 dark:text-gray-300">

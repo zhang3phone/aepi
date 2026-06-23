@@ -9,7 +9,11 @@ import {
   getAPlusModuleGenerationSize,
   getAPlusModuleSpecs,
   getAPlusModuleUploadSize,
+  getAmazonListingSlots,
+  normalizeAPlusModuleSpecs,
+  normalizeListingImageCount,
   type APlusContentType,
+  type AmazonAPlusModuleSpec,
   type AmazonAPlusPlan,
   type AmazonImagePlan,
   type AmazonPlannerMode,
@@ -86,7 +90,7 @@ const ICON_BENEFIT_NEGATIVE_GUARD = 'duplicate benefit icons, repeated selling p
 const ICON_ROW_PLAN_RE = /(small\s*(benefit\s*)?icons?|benefit\s*icons?|feature\s*icons?|badge\s*row|icon\s*(row|strip|set|badges?)|bottom\s*icons?|pictograms?|小图标|图标栏|图标行|功能图标|卖点图标|底部图标|图标卖点)/i
 const TEXT_FREE_SCENE_PLANNER_GUIDE = [
   'Text-free product scene image rule:',
-  '- In the 7-image listing plan, include 1-2 product scene / lifestyle images with no on-image text at all.',
+  '- In the listing image plan, include 1-2 product scene / lifestyle images with no on-image text at all.',
   '- These text-free scene images should show the product naturally in a realistic use environment, with the product clearly visible and supported by real context.',
   '- Text-free scene images must not contain headlines, captions, callouts, labels, arrows, measurement marks, icon rows, badges, benefit copy, feature copy, or marketing slogans.',
   '- Put functional explanations, benefit claims, icons, and text callouts into separate information images instead of mixing them into these text-free scene images.',
@@ -157,39 +161,42 @@ const NEGATIVE_PROMPT_SCHEMA = {
   description: 'English negative prompt for the image model. Never include Chinese characters.',
 } as const
 
-const LISTING_PLANNER_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    product: PRODUCT_SCHEMA,
-    sellingPoints: SELLING_POINTS_SCHEMA,
-    seriesStyleGuide: {
-      type: 'string',
-      description: 'LLM-authored English visual style guide to keep the whole image set coherent.',
-    },
-    imagePlans: {
-      type: 'array',
-      minItems: 7,
-      maxItems: 7,
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          slot: { type: 'string', enum: ['MAIN', 'PT01', 'PT02', 'PT03', 'PT04', 'PT05', 'PT06'] },
-          label: CHINESE_LABEL_SCHEMA,
-          planMarkdown: PLAN_MARKDOWN_SCHEMA,
-          prompt: ENGLISH_IMAGE_PROMPT_SCHEMA,
-          negativePrompt: NEGATIVE_PROMPT_SCHEMA,
+function createListingPlannerSchema(listingImageCount: number) {
+  const slots = getAmazonListingSlots(listingImageCount)
+  return {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      product: PRODUCT_SCHEMA,
+      sellingPoints: SELLING_POINTS_SCHEMA,
+      seriesStyleGuide: {
+        type: 'string',
+        description: 'LLM-authored English visual style guide to keep the whole image set coherent.',
+      },
+      imagePlans: {
+        type: 'array',
+        minItems: slots.length,
+        maxItems: slots.length,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            slot: { type: 'string', enum: slots },
+            label: CHINESE_LABEL_SCHEMA,
+            planMarkdown: PLAN_MARKDOWN_SCHEMA,
+            prompt: ENGLISH_IMAGE_PROMPT_SCHEMA,
+            negativePrompt: NEGATIVE_PROMPT_SCHEMA,
+          },
+          required: ['slot', 'label', 'planMarkdown', 'prompt', 'negativePrompt'],
         },
-        required: ['slot', 'label', 'planMarkdown', 'prompt', 'negativePrompt'],
       },
     },
-  },
-  required: ['product', 'sellingPoints', 'seriesStyleGuide', 'imagePlans'],
-} as const
+    required: ['product', 'sellingPoints', 'seriesStyleGuide', 'imagePlans'],
+  } as const
+}
 
-function createAPlusPlannerSchema(aPlusType: APlusContentType) {
-  const specs = getAPlusModuleSpecs(aPlusType)
+function createAPlusPlannerSchema(aPlusType: APlusContentType, aPlusModuleSpecs?: AmazonAPlusModuleSpec[]) {
+  const specs = normalizeAPlusModuleSpecs(aPlusType, aPlusModuleSpecs)
   return {
     type: 'object',
     additionalProperties: false,
@@ -405,8 +412,7 @@ async function readPlannerResponseText(response: Response): Promise<string> {
   return text
 }
 
-function normalizePlan(plan: Partial<AmazonImagePlan>, index: number): AmazonImagePlan {
-  const slots = ['MAIN', 'PT01', 'PT02', 'PT03', 'PT04', 'PT05', 'PT06']
+function normalizePlan(plan: Partial<AmazonImagePlan>, index: number, slots: string[]): AmazonImagePlan {
   const normalized = {
     slot: plan.slot || slots[index] || `PT${String(index).padStart(2, '0')}`,
     label: plan.label || '图片方案',
@@ -547,12 +553,6 @@ function inferHighProbabilityAudienceAndScene(
       scene: 'garage workbench, home repair, workshop, tool organization scene',
     }
   }
-  if (/clothing|apparel|shirt|dress|jacket|pants|shoe|wear|fashion/.test(text)) {
-    return {
-      audience: 'fashion shoppers, daily wear users, style-conscious buyers',
-      scene: 'white-background apparel display, wardrobe styling, everyday outfit scene',
-    }
-  }
   if (/home|decor|bathroom|bedroom|living room|kitchen|storage|organizer/.test(text)) {
     return {
       audience: 'home users, renters, homeowners, household organizers',
@@ -598,14 +598,20 @@ function normalizeSeriesStyleGuide(payload: PlannerApiPayload): string {
   return typeof payload.seriesStyleGuide === 'string' ? payload.seriesStyleGuide.trim() : ''
 }
 
-function normalizeListingPlannerApiPayload(payload: PlannerApiPayload, baseDraft: AmazonPromptDraft): PlannerApiResult {
+function normalizeListingPlannerApiPayload(payload: PlannerApiPayload, baseDraft: AmazonPromptDraft, listingImageCount: number): PlannerApiResult {
   const parsed = normalizeParsedListing(payload, baseDraft)
   const seriesStyleGuide = normalizeSeriesStyleGuide(payload)
+  const slots = getAmazonListingSlots(listingImageCount)
   const plans = Array.isArray(payload.imagePlans)
-    ? payload.imagePlans.map(normalizePlan).filter((plan) => plan.prompt.trim() && plan.planMarkdown.trim()).slice(0, 7)
+    ? slots
+      .map((slot, index) => {
+        const rawPlan = payload.imagePlans?.find((plan) => plan?.slot === slot) ?? payload.imagePlans?.[index]
+        return rawPlan ? normalizePlan(rawPlan, index, slots) : null
+      })
+      .filter((plan): plan is AmazonImagePlan => plan != null && Boolean(plan.prompt.trim()) && Boolean(plan.planMarkdown.trim()))
     : []
 
-  if (plans.length !== 7) throw new Error('AI生成提示词结果不是 7 张图')
+  if (plans.length !== slots.length) throw new Error(`AI生成提示词结果不是 ${slots.length} 张图`)
 
   return {
     mode: 'listing',
@@ -621,8 +627,9 @@ function normalizeAPlusPlan(
   index: number,
   aPlusType: APlusContentType,
   tier: SizeTier,
+  aPlusModuleSpecs?: AmazonAPlusModuleSpec[],
 ): AmazonAPlusPlan {
-  const spec = getAPlusModuleSpecs(aPlusType)[index]
+  const spec = normalizeAPlusModuleSpecs(aPlusType, aPlusModuleSpecs)[index]
   if (!spec) throw new Error('A+ 模块规格不存在')
 
   const normalized = {
@@ -640,16 +647,22 @@ function normalizeAPlusPlan(
   return enforcePlannerPlanRules(normalized)
 }
 
-function normalizeAPlusPlannerApiPayload(payload: PlannerApiPayload, aPlusType: APlusContentType, tier: SizeTier, baseDraft: AmazonPromptDraft): PlannerApiResult {
+function normalizeAPlusPlannerApiPayload(
+  payload: PlannerApiPayload,
+  aPlusType: APlusContentType,
+  tier: SizeTier,
+  baseDraft: AmazonPromptDraft,
+  aPlusModuleSpecs?: AmazonAPlusModuleSpec[],
+): PlannerApiResult {
   const parsed = normalizeParsedListing(payload, baseDraft)
   const seriesStyleGuide = normalizeSeriesStyleGuide(payload)
-  const specs = getAPlusModuleSpecs(aPlusType)
+  const specs = normalizeAPlusModuleSpecs(aPlusType, aPlusModuleSpecs)
   const rawPlans = Array.isArray(payload.aPlusPlans) ? payload.aPlusPlans : []
   if (rawPlans.length !== specs.length) throw new Error(`AI生成提示词 A+ 结果不是 ${specs.length} 个模块`)
 
   const aPlusPlans = specs.map((spec, index) => {
     const bySlot = rawPlans.find((plan) => plan?.slot === spec.slot)
-    return normalizeAPlusPlan(bySlot ?? rawPlans[index], index, aPlusType, tier)
+    return normalizeAPlusPlan(bySlot ?? rawPlans[index], index, aPlusType, tier, specs)
   })
 
   const emptyPrompt = aPlusPlans.find((plan) => !plan.prompt.trim())
@@ -667,10 +680,11 @@ function normalizeAPlusPlannerApiPayload(payload: PlannerApiPayload, aPlusType: 
   }
 }
 
-function buildListingPlannerInstructions(baseDraft: AmazonPromptDraft) {
+function buildListingPlannerInstructions(baseDraft: AmazonPromptDraft, listingImageCount: number) {
+  const slots = getAmazonListingSlots(listingImageCount)
   return [
     'You are an Amazon image-planning agent. The user provides listing copy and optional product reference images.',
-    'Create a complete visual plan for exactly 7 Amazon listing image slots: MAIN, PT01, PT02, PT03, PT04, PT05, PT06.',
+    `Create a complete visual plan for exactly ${slots.length} Amazon listing image slots: ${slots.join(', ')}.`,
     'The application only fixes the slot count and order. You must decide the strategy, composition, copy approach, visual treatment, prompt content, and negative prompt content.',
     'Use the Amazon reference material below to improve compliance judgment. It is not a fixed slot-by-slot framework, and it must not replace the product facts from the listing and reference images.',
     formatAmazonListingReferenceMaterial(),
@@ -703,8 +717,12 @@ function getAPlusPlannerTypeName(aPlusType: APlusContentType) {
   }
 }
 
-function buildAPlusPlannerInstructions(baseDraft: AmazonPromptDraft, aPlusType: APlusContentType) {
-  const specs = getAPlusModuleSpecs(aPlusType)
+function buildAPlusPlannerInstructions(
+  baseDraft: AmazonPromptDraft,
+  aPlusType: APlusContentType,
+  aPlusModuleSpecs?: AmazonAPlusModuleSpec[],
+) {
+  const specs = normalizeAPlusModuleSpecs(aPlusType, aPlusModuleSpecs)
   const typeLabel = getAPlusPlannerTypeName(aPlusType)
   const mobileGuidance = aPlusType === 'mobile'
     ? 'For Mobile A+ modules, design every 600x450 image for compact mobile screens: one clear message per module, large product evidence, short mobile-readable US-English copy, and no dense multi-column layouts.'
@@ -741,12 +759,13 @@ function buildPlannerInstructions(
   baseDraft: AmazonPromptDraft,
   mode: AmazonPlannerMode,
   aPlusType: APlusContentType,
-  options: { textOnlyReferenceGuard?: boolean } = {},
+  options: { textOnlyReferenceGuard?: boolean; listingImageCount?: number; aPlusModuleSpecs?: AmazonAPlusModuleSpec[] } = {},
 ) {
+  const listingImageCount = normalizeListingImageCount(options.listingImageCount)
   return [
     mode === 'aplus'
-    ? buildAPlusPlannerInstructions(baseDraft, aPlusType)
-    : buildListingPlannerInstructions(baseDraft),
+    ? buildAPlusPlannerInstructions(baseDraft, aPlusType, options.aPlusModuleSpecs)
+    : buildListingPlannerInstructions(baseDraft, listingImageCount),
     options.textOnlyReferenceGuard ? DEEPSEEK_TEXT_ONLY_PLANNER_GUARD : '',
   ].filter(Boolean).join('\n')
 }
@@ -778,14 +797,19 @@ function buildPlannerInputText(
   listingText: string,
   mode: AmazonPlannerMode,
   aPlusType: APlusContentType,
-  options: { includeReferenceImageInstruction?: boolean; userProductFacts?: string } = {},
+  options: {
+    includeReferenceImageInstruction?: boolean
+    userProductFacts?: string
+    listingImageCount?: number
+    aPlusModuleSpecs?: AmazonAPlusModuleSpec[]
+  } = {},
 ) {
   const referenceImageInstruction = options.includeReferenceImageInstruction
     ? 'If reference images are attached, use them to understand the actual product appearance and included items.'
     : ''
   const userProductFacts = options.userProductFacts?.trim()
   if (mode === 'aplus') {
-    const specs = getAPlusModuleSpecs(aPlusType)
+    const specs = normalizeAPlusModuleSpecs(aPlusType, options.aPlusModuleSpecs)
     return [
       `Parse this Amazon listing copy and produce the ${getAPlusContentTypeLabel(aPlusType)} module plan.`,
       'Use the title and bullet points from the pasted text. If a field is uncertain, infer conservatively from the listing.',
@@ -797,9 +821,10 @@ function buildPlannerInputText(
       listingText,
     ].filter((item) => item !== '').join('\n')
   }
+  const slots = getAmazonListingSlots(options.listingImageCount)
 
   return [
-    'Parse this Amazon listing copy and produce the 7-image visual plan.',
+    `Parse this Amazon listing copy and produce the ${slots.length}-image visual plan.`,
     'Use the title and bullet points from the pasted text. If a field is uncertain, infer conservatively from the listing.',
     'Target audience and usage scene are required. If they are missing, infer the highest-probability audience and scene instead of leaving them blank.',
     referenceImageInstruction,
@@ -838,21 +863,26 @@ function buildResponsesPlannerInput(text: string, referenceImageDataUrls: string
   ]
 }
 
-function buildChatPlannerSchemaGuide(mode: AmazonPlannerMode, aPlusType: APlusContentType) {
+function buildChatPlannerSchemaGuide(
+  mode: AmazonPlannerMode,
+  aPlusType: APlusContentType,
+  options: { listingImageCount?: number; aPlusModuleSpecs?: AmazonAPlusModuleSpec[] } = {},
+) {
   const productFields = 'product { title, category, color, material, audience, scene, packageIncludes }'
   const styleFields = 'seriesStyleGuide string'
   if (mode === 'aplus') {
-    const specs = getAPlusModuleSpecs(aPlusType)
+    const specs = normalizeAPlusModuleSpecs(aPlusType, options.aPlusModuleSpecs)
     return [
       `Return JSON with: ${productFields}, sellingPoints string[], ${styleFields}, aPlusPlans array.`,
       `aPlusPlans must contain exactly ${specs.length} items in this order: ${specs.map((spec) => spec.slot).join(', ')}.`,
       'Each aPlusPlans item must include: slot, label, moduleType, planMarkdown, textTitle, textBody, prompt, negativePrompt.',
     ].join('\n')
   }
+  const slots = getAmazonListingSlots(options.listingImageCount)
 
   return [
     `Return JSON with: ${productFields}, sellingPoints string[], ${styleFields}, imagePlans array.`,
-    'imagePlans must contain exactly 7 items in this order: MAIN, PT01, PT02, PT03, PT04, PT05, PT06.',
+    `imagePlans must contain exactly ${slots.length} items in this order: ${slots.join(', ')}.`,
     'Each imagePlans item must include: slot, label, planMarkdown, prompt, negativePrompt.',
   ].join('\n')
 }
@@ -861,12 +891,12 @@ function buildChatPlannerSystemPrompt(
   baseDraft: AmazonPromptDraft,
   mode: AmazonPlannerMode,
   aPlusType: APlusContentType,
-  options: { textOnlyReferenceGuard?: boolean } = {},
+  options: { textOnlyReferenceGuard?: boolean; listingImageCount?: number; aPlusModuleSpecs?: AmazonAPlusModuleSpec[] } = {},
 ) {
   return [
     buildPlannerInstructions(baseDraft, mode, aPlusType, options),
     'Return a valid JSON object only. Do not output Markdown fences, comments, or any text outside the JSON object.',
-    buildChatPlannerSchemaGuide(mode, aPlusType),
+    buildChatPlannerSchemaGuide(mode, aPlusType, options),
   ].join('\n\n')
 }
 
@@ -878,14 +908,18 @@ export async function callAmazonPlannerApi(options: {
   model?: string
   mode?: AmazonPlannerMode
   aPlusType?: APlusContentType
+  listingImageCount?: number
+  aPlusModuleSpecs?: AmazonAPlusModuleSpec[]
   aPlusGenerationTier?: SizeTier
   signal?: AbortSignal
 }): Promise<PlannerApiResult> {
   const model = options.model?.trim() || options.profile.model.trim() || (options.profile.apiMode === 'chat' ? DEFAULT_CHAT_MODEL : DEFAULT_RESPONSES_MODEL)
   const mode = options.mode ?? 'listing'
   const aPlusType = options.aPlusType ?? 'standard-large'
+  const listingImageCount = normalizeListingImageCount(options.listingImageCount)
+  const aPlusModuleSpecs = normalizeAPlusModuleSpecs(aPlusType, options.aPlusModuleSpecs)
   const aPlusGenerationTier = options.aPlusGenerationTier ?? '2K'
-  const schema = mode === 'aplus' ? createAPlusPlannerSchema(aPlusType) : LISTING_PLANNER_SCHEMA
+  const schema = mode === 'aplus' ? createAPlusPlannerSchema(aPlusType, aPlusModuleSpecs) : createListingPlannerSchema(listingImageCount)
   const proxyConfig = readClientDevProxyConfig()
   const useApiProxy = shouldUseApiProxy(options.profile.apiProxy, proxyConfig)
   const useChatCompletions = options.profile.apiMode === 'chat'
@@ -893,6 +927,8 @@ export async function callAmazonPlannerApi(options: {
   const inputText = buildPlannerInputText(options.listingText, mode, aPlusType, {
     includeReferenceImageInstruction: !isDeepSeekPlannerProfile,
     userProductFacts: isDeepSeekPlannerProfile ? buildUserProductFactsText(options.baseDraft) : '',
+    listingImageCount,
+    aPlusModuleSpecs,
   })
   const referenceImageDataUrls = isDeepSeekPlannerProfile
     ? []
@@ -917,6 +953,8 @@ export async function callAmazonPlannerApi(options: {
               role: 'system',
               content: buildChatPlannerSystemPrompt(options.baseDraft, mode, aPlusType, {
                 textOnlyReferenceGuard: isDeepSeekPlannerProfile,
+                listingImageCount,
+                aPlusModuleSpecs,
               }),
             },
             {
@@ -931,6 +969,8 @@ export async function callAmazonPlannerApi(options: {
           model,
           instructions: buildPlannerInstructions(options.baseDraft, mode, aPlusType, {
             textOnlyReferenceGuard: isDeepSeekPlannerProfile,
+            listingImageCount,
+            aPlusModuleSpecs,
           }),
           input: buildResponsesPlannerInput(inputText, referenceImageDataUrls),
           text: {
@@ -954,6 +994,6 @@ export async function callAmazonPlannerApi(options: {
   const text = await readPlannerResponseText(response)
   const payload = parsePlannerPayload(text)
   return mode === 'aplus'
-    ? normalizeAPlusPlannerApiPayload(payload, aPlusType, aPlusGenerationTier, options.baseDraft)
-    : normalizeListingPlannerApiPayload(payload, options.baseDraft)
+    ? normalizeAPlusPlannerApiPayload(payload, aPlusType, aPlusGenerationTier, options.baseDraft, aPlusModuleSpecs)
+    : normalizeListingPlannerApiPayload(payload, options.baseDraft, listingImageCount)
 }

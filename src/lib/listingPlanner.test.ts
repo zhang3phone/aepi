@@ -4,12 +4,18 @@ import { DEFAULT_AMAZON_PROMPT_DRAFT } from './amazonPrompt'
 import {
   buildAmazonAPlusPlanPrompt,
   buildAmazonPlanPrompt,
+  buildClothingModelPlan,
+  CLOTHING_MODEL_TARGET_SIZE,
   formatAPlusModuleText,
+  getAmazonListingSlots,
   getAPlusContentTypeLabel,
   getAPlusModuleDisplayName,
   getAPlusModuleEnglishName,
   getAPlusModuleSpecs,
+  insertAPlusModuleSpecAfter,
   isAmazonListingMainSlot,
+  isClothingModelSlot,
+  normalizeAPlusModuleSpecs,
 } from './listingPlanner'
 import { callAmazonPlannerApi } from './listingPlannerApi'
 
@@ -118,6 +124,38 @@ describe('Amazon prompt builders', () => {
     expect(isAmazonListingMainSlot(undefined)).toBe(false)
   })
 
+  it('builds a clothing-only MODEL plan with selected model options and identity guards', () => {
+    const plan = buildClothingModelPlan({
+      ...DEFAULT_AMAZON_PROMPT_DRAFT,
+      productTitle: 'Crochet Sleeveless Tank Top',
+      category: 'Apparel / Women Tops',
+      color: 'cream',
+      material: 'crochet knit cotton blend',
+      sellingPoints: 'breathable knit texture; summer layering',
+      forbidden: 'handbag, necklace',
+    }, {
+      modelType: 'black',
+      angle: 'angle-45',
+      armPose: 'arms-crossed',
+    })
+
+    expect(isClothingModelSlot(plan.slot)).toBe(true)
+    expect(plan.label).toBe('白底模特主图')
+    expect(plan.kind).toBe('main')
+    expect(plan.planMarkdown).toContain(CLOTHING_MODEL_TARGET_SIZE)
+    expect(plan.planMarkdown).toContain('黑人模特')
+    expect(plan.planMarkdown).toContain('45度侧面')
+    expect(plan.planMarkdown).toContain('双手环抱')
+    expect(plan.prompt).toContain(`Amazon apparel main image at ${CLOTHING_MODEL_TARGET_SIZE}`)
+    expect(plan.prompt).toContain('adult Black fashion model')
+    expect(plan.prompt).toContain('45-degree three-quarter side angle')
+    expect(plan.prompt).toContain('arms crossed naturally')
+    expect(plan.prompt).toContain('Pure white background RGB 255,255,255')
+    expect(plan.prompt).toContain('Do not copy any reference person identity')
+    expect(plan.negativePrompt).toContain('copied face')
+    expect(plan.negativePrompt).toContain('handbag, necklace')
+  })
+
   it('builds A+ prompts with the same LLM-led structure', () => {
     const prompt = buildAmazonAPlusPlanPrompt({
       prompt: 'Premium A+ banner with the product in a refined kitchen setting.',
@@ -149,6 +187,32 @@ describe('Amazon prompt builders', () => {
     expect(prompt).toContain('Style reference: 明亮零售.')
     expect(prompt).toContain('Palette anchors: #FFFFFF, #F97316, #2563EB.')
     expect(prompt).toContain('Series style guide (lower priority than the selected visual style):')
+  })
+
+  it('appends final output resolution once for Listing prompts', () => {
+    const prompt = buildAmazonPlanPrompt({
+      prompt: 'Create an Amazon listing image.\n\nFinal output resolution: 1024x1024.',
+      negativePrompt: 'watermark',
+      targetSize: '2048x2048',
+      styleReferenceAttached: false,
+    })
+
+    expect(prompt).toContain('Final output resolution: 2048x2048.')
+    expect(prompt).not.toContain('1024x1024')
+    expect(prompt.match(/Final output resolution:/g)).toHaveLength(1)
+  })
+
+  it('appends final output resolution once for A+ prompts', () => {
+    const prompt = buildAmazonAPlusPlanPrompt({
+      prompt: 'Create an A+ module.\n\nFinal output resolution: 2048x2048.',
+      negativePrompt: 'watermark',
+      targetSize: '4096x2304',
+      styleReferenceAttached: false,
+    })
+
+    expect(prompt).toContain('Final output resolution: 4096x2304.')
+    expect(prompt).not.toContain('2048x2048')
+    expect(prompt.match(/Final output resolution:/g)).toHaveLength(1)
   })
 
 })
@@ -184,10 +248,21 @@ describe('A+ module helpers', () => {
       textBody: 'Elastic loops keep pens, pencils, and small tools easy to find.',
     })).toBe('Organized in Seconds\n\nElastic loops keep pens, pencils, and small tools easy to find.')
   })
+
+  it('adds and renumbers same-size A+ modules', () => {
+    const specs = normalizeAPlusModuleSpecs('standard-large')
+    const expanded = insertAPlusModuleSpecAfter('standard-large', specs, 1)
+
+    expect(expanded).toHaveLength(6)
+    expect(expanded.map((spec) => spec.slot)).toEqual(['A+L01', 'A+L02', 'A+L03', 'A+L04', 'A+L05', 'A+L06'])
+    expect(expanded[1]?.uploadWidth).toBe(970)
+    expect(expanded[2]?.uploadWidth).toBe(970)
+    expect(expanded[1]?.moduleType).toBe(expanded[2]?.moduleType)
+  })
 })
 
-function createApiPlans() {
-  return ['MAIN', 'PT01', 'PT02', 'PT03', 'PT04', 'PT05', 'PT06'].map((slot) => ({
+function createApiPlans(count = 7) {
+  return getAmazonListingSlots(count).map((slot) => ({
     slot,
     label: `${slot} 方案`,
     planMarkdown: `## ${slot} 主图方案\n\n中文策划说明。`,
@@ -196,7 +271,7 @@ function createApiPlans() {
   }))
 }
 
-function createApiPayload(title = 'AI planned tumbler') {
+function createApiPayload(title = 'AI planned tumbler', count = 7) {
   return {
     product: {
       title,
@@ -210,7 +285,7 @@ function createApiPayload(title = 'AI planned tumbler') {
     },
     sellingPoints: ['Cold for 24 hours'],
     seriesStyleGuide: 'Use a cohesive warm commercial style across the set.',
-    imagePlans: createApiPlans(),
+    imagePlans: createApiPlans(count),
   }
 }
 
@@ -258,6 +333,33 @@ function createAPlusPayload(prefix: 'A+S' | 'A+L' | 'A+P' | 'A+M', title = 'AI p
     sellingPoints: ['Cold for 24 hours'],
     seriesStyleGuide: 'Use a cohesive A+ visual style across the module set.',
     aPlusPlans: createAPlusPlans(prefix, brand),
+  }
+}
+
+function createAPlusPayloadFromSpecs(specs: ReturnType<typeof normalizeAPlusModuleSpecs>, title = 'Custom A+ tumbler') {
+  return {
+    product: {
+      title,
+      category: 'Kitchen / Drinkware',
+      brand: '',
+      color: 'matte black',
+      material: 'stainless steel',
+      audience: 'commuters',
+      scene: 'car cup holder and office desk daily hydration scene',
+      packageIncludes: '1 tumbler, 1 straw',
+    },
+    sellingPoints: ['Cold for 24 hours'],
+    seriesStyleGuide: 'Use a cohesive A+ visual style across the module set.',
+    aPlusPlans: specs.map((spec) => ({
+      slot: spec.slot,
+      label: `${spec.slot} 模块`,
+      moduleType: spec.moduleType,
+      planMarkdown: `## ${spec.slot} 模块方案\n\n中文 A+ 策划说明。`,
+      textTitle: '',
+      textBody: '',
+      prompt: `Create A+ module ${spec.slot} for the product.`,
+      negativePrompt: `negative ${spec.slot}`,
+    })),
   }
 }
 
@@ -331,6 +433,39 @@ describe('callAmazonPlannerApi', () => {
     })
   })
 
+  it.each([8, 12])('uses custom Listing image count %i in schema, instructions, and parsing', async (count) => {
+    const apiPayload = createApiPayload(`AI planned ${count}-image tumbler`, count)
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => new Response(JSON.stringify({
+      output_text: JSON.stringify(apiPayload),
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await callAmazonPlannerApi({
+      listingText: SAMPLE_LISTING,
+      baseDraft: DEFAULT_AMAZON_PROMPT_DRAFT,
+      profile: createDefaultOpenAIProfile({
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'user-api-key',
+        apiMode: 'responses',
+        model: 'gpt-planner-profile',
+      }),
+      listingImageCount: count,
+    })
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    const slots = getAmazonListingSlots(count)
+    expect(body.instructions).toContain(`exactly ${count} Amazon listing image slots: ${slots.join(', ')}`)
+    expect(body.input[0].content[0].text).toContain(`produce the ${count}-image visual plan`)
+    expect(body.text.format.schema.properties.imagePlans.minItems).toBe(count)
+    expect(body.text.format.schema.properties.imagePlans.maxItems).toBe(count)
+    expect(body.text.format.schema.properties.imagePlans.items.properties.slot.enum).toEqual(slots)
+    expect(result.plans).toHaveLength(count)
+    expect(result.plans.map((plan) => plan.slot)).toEqual(slots)
+  })
+
   it('infers high-probability audience and scene when the API leaves them empty', async () => {
     const apiPayload = createApiPayload()
     apiPayload.product.audience = ''
@@ -356,6 +491,38 @@ describe('callAmazonPlannerApi', () => {
 
     expect(result.parsed.inferred.audience).toContain('commuters')
     expect(result.parsed.inferred.scene).toContain('car cup holder')
+  })
+
+  it('does not inject clothing-specific audience or scene fallbacks', async () => {
+    const apiPayload = createApiPayload('AI planned linen shirt')
+    apiPayload.product.category = 'Apparel'
+    apiPayload.product.color = ''
+    apiPayload.product.material = ''
+    apiPayload.product.audience = ''
+    apiPayload.product.scene = ''
+    apiPayload.product.packageIncludes = ''
+    apiPayload.sellingPoints = ['Breathable fabric for everyday wear']
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => new Response(JSON.stringify({
+      output_text: JSON.stringify(apiPayload),
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await callAmazonPlannerApi({
+      listingText: 'Title: Men Linen Shirt\n- Breathable fabric for everyday wear',
+      baseDraft: DEFAULT_AMAZON_PROMPT_DRAFT,
+      profile: createDefaultOpenAIProfile({
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'user-api-key',
+        apiMode: 'responses',
+        model: 'gpt-planner-profile',
+      }),
+    })
+
+    expect(result.parsed.inferred.audience).toContain('daily-use shoppers')
+    expect(result.parsed.inferred.scene).not.toMatch(/apparel|wardrobe|fashion/i)
   })
 
   it('keeps size chart plans dedicated to dimensions only', async () => {
@@ -687,6 +854,47 @@ describe('callAmazonPlannerApi', () => {
       uploadSize: '220x220',
       textTitle: 'Benefit A+S05',
       textBody: 'External A+ copy for A+S05.',
+    })
+  })
+
+  it('uses custom A+ module specs in schema, instructions, and parsing', async () => {
+    const customSpecs = insertAPlusModuleSpecAfter('standard-large', normalizeAPlusModuleSpecs('standard-large'), 1)
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => new Response(JSON.stringify({
+      output_text: JSON.stringify(createAPlusPayloadFromSpecs(customSpecs)),
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await callAmazonPlannerApi({
+      listingText: SAMPLE_LISTING,
+      baseDraft: DEFAULT_AMAZON_PROMPT_DRAFT,
+      profile: createDefaultOpenAIProfile({
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'user-api-key',
+        apiMode: 'responses',
+        model: 'gpt-planner-profile',
+      }),
+      mode: 'aplus',
+      aPlusType: 'standard-large',
+      aPlusModuleSpecs: customSpecs,
+      aPlusGenerationTier: '2K',
+    })
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    expect(body.text.format.schema.properties.aPlusPlans.minItems).toBe(customSpecs.length)
+    expect(body.text.format.schema.properties.aPlusPlans.maxItems).toBe(customSpecs.length)
+    expect(body.text.format.schema.properties.aPlusPlans.items.properties.slot.enum).toEqual(customSpecs.map((spec) => spec.slot))
+    expect(body.instructions).toContain(`Return exactly ${customSpecs.length} modules in this order`)
+    expect(body.instructions).toContain('A+L06 Single Image 5 970x600px')
+    expect(body.input[0].content[0].text).toContain(`Use these A+ modules exactly: ${customSpecs.map((spec) => spec.slot).join(', ')}.`)
+    expect(result.aPlusPlans).toHaveLength(customSpecs.length)
+    expect(result.aPlusPlans.map((plan) => plan.slot)).toEqual(customSpecs.map((spec) => spec.slot))
+    expect(result.aPlusPlans[5]).toMatchObject({
+      slot: 'A+L06',
+      moduleType: 'single-image',
+      uploadSize: '970x600',
     })
   })
 

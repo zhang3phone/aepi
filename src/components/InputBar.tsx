@@ -17,7 +17,7 @@ import { estimateTextTokens, formatTokenCount } from '../lib/tokenUsage'
 import Select from './Select'
 import SizePickerModal from './SizePickerModal'
 import ViewportTooltip from './ViewportTooltip'
-import { CloseIcon, ImportIcon } from './icons'
+import { CloseIcon, ImportIcon, SidebarRightIcon } from './icons'
 
 
 function getMentionTagTextLength(el: Element) {
@@ -341,6 +341,16 @@ const API_MAX_IMAGES = 16
 const DESKTOP_DOCK_MIN_WIDTH = 1024
 const DESKTOP_DOCK_BOTTOM_CLEARANCE = 32
 const AT_IMAGE_MENU_WIDTH = 256
+const DESKTOP_DOCK_COLLAPSED_STORAGE_KEY = 'aepi-prompt-dock-collapsed'
+
+function readDesktopDockCollapsed() {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem(DESKTOP_DOCK_COLLAPSED_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640)
@@ -516,6 +526,7 @@ export default function InputBar() {
   const [attachHover, setAttachHover] = useState(false)
   const [imageHintId, setImageHintId] = useState<string | null>(null)
   const [mobileCollapsed, setMobileCollapsed] = useState(false)
+  const [desktopDockCollapsed, setDesktopDockCollapsed] = useState(readDesktopDockCollapsed)
   const [showSizePicker, setShowSizePicker] = useState(false)
   const [showMobileUploadMenu, setShowMobileUploadMenu] = useState(false)
   const [maskPreviewUrl, setMaskPreviewUrl] = useState('')
@@ -576,6 +587,21 @@ export default function InputBar() {
       document.documentElement.style.removeProperty('--input-bar-clearance')
     }
   }, [updateInputBarClearance])
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('home-input-dock-collapsed', desktopDockCollapsed)
+    try {
+      window.localStorage.setItem(DESKTOP_DOCK_COLLAPSED_STORAGE_KEY, desktopDockCollapsed ? '1' : '0')
+    } catch {
+      // The dock still works when browser storage is unavailable.
+    }
+    updateInputBarClearance()
+
+    return () => {
+      document.documentElement.classList.remove('home-input-dock-collapsed')
+    }
+  }, [desktopDockCollapsed, updateInputBarClearance])
+
   const imageHintTimerRef = useRef<number | null>(null)
   const [outputCompressionInput, setOutputCompressionInput] = useState(
     params.output_compression == null ? '' : String(params.output_compression),
@@ -1260,12 +1286,11 @@ export default function InputBar() {
     const isDesktopDock = window.innerWidth >= DESKTOP_DOCK_MIN_WIDTH
 
     const imagesHeight = imagesRef.current?.offsetHeight ?? 0
-    const paramsHeight = paramsPanelRef.current?.offsetHeight ?? 0
 
-    // 右侧 Dock：文本框吃掉中间剩余空间，参数和按钮贴到底部。
-    // 底部输入栏：沿用内容自适应，最高不超过页面 40%。
+    // Desktop dock stays compact by default; long prompts scroll inside the input.
+    // Mobile remains a bottom drawer and can use more vertical room.
     const maxH = isDesktopDock
-      ? Math.max((cardRef.current?.clientHeight ?? window.innerHeight - 120) - imagesHeight - paramsHeight - 44, 72)
+      ? Math.max(Math.min(window.innerHeight * 0.34, 260), 96)
       : Math.max(window.innerHeight * 0.4 - imagesHeight - 140, 80)
 
     // 1. 关闭过渡动画，设高度为 0 以获取真实的文本内容高度
@@ -1279,7 +1304,7 @@ export default function InputBar() {
     const minH = Math.max(42, placeholderH)
 
     const desired = Math.max(scrollH, minH)
-    const targetH = isDesktopDock ? maxH : desired > maxH ? maxH : desired
+    const targetH = desired > maxH ? maxH : desired
 
     // 判断是否只有一行
     setIsSingleLine(desired <= minH)
@@ -2000,8 +2025,30 @@ export default function InputBar() {
         />
       )}
 
-      <div data-input-bar className="home-input-dock pointer-events-none fixed bottom-4 left-1/2 z-30 w-full max-w-4xl -translate-x-1/2 px-3 transition-all duration-300 sm:bottom-6 sm:px-4 lg:bottom-6 lg:left-auto lg:top-20 lg:flex lg:max-w-none lg:translate-x-0 lg:flex-col lg:px-0">
-        {selectedTaskIds.length > 0 && (
+      <div
+        data-input-bar
+        data-dock-collapsed={desktopDockCollapsed ? 'true' : 'false'}
+        className="home-input-dock pointer-events-none fixed bottom-4 left-1/2 z-30 w-full max-w-4xl -translate-x-1/2 px-3 transition-all duration-300 sm:bottom-6 sm:px-4 lg:bottom-auto lg:left-auto lg:top-20 lg:flex lg:max-w-none lg:translate-x-0 lg:flex-col lg:items-stretch lg:px-0"
+      >
+        {desktopDockCollapsed && (
+          <button
+            type="button"
+            onClick={() => setDesktopDockCollapsed(false)}
+            className="pointer-events-auto hidden h-[9.5rem] w-12 flex-col items-center justify-center gap-2 rounded-l-2xl border border-r-0 border-slate-200 bg-white/90 text-slate-600 shadow-lg shadow-slate-900/10 backdrop-blur transition hover:bg-blue-50 hover:text-blue-700 dark:border-white/[0.08] dark:bg-slate-950/90 dark:text-slate-300 dark:hover:bg-blue-400/10 dark:hover:text-blue-200 lg:flex"
+            title="展开提示词生图区"
+            aria-label="展开提示词生图区"
+          >
+            <SidebarRightIcon className="h-5 w-5" />
+            <span className="[writing-mode:vertical-rl] text-xs font-semibold tracking-wide">提示词</span>
+            {inputImages.length > 0 && (
+              <span className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700 dark:bg-blue-400/10 dark:text-blue-200">
+                {inputImages.length}
+              </span>
+            )}
+          </button>
+        )}
+
+        {!desktopDockCollapsed && selectedTaskIds.length > 0 && (
           <div className="mb-3 flex justify-center lg:justify-end">
             <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-lg rounded-full flex items-center p-1 border border-gray-200/50 dark:border-white/10 pointer-events-auto">
               <button
@@ -2069,7 +2116,7 @@ export default function InputBar() {
             </div>
           </div>
         )}
-        <div ref={cardRef} className="pointer-events-auto bg-white/70 dark:bg-gray-900/70 backdrop-blur-2xl border border-white/50 dark:border-white/[0.08] shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] rounded-2xl sm:rounded-3xl p-3 sm:p-4 ring-1 ring-black/5 dark:ring-white/10 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden">
+        <div ref={cardRef} className={`pointer-events-auto bg-white/70 dark:bg-gray-900/70 backdrop-blur-2xl border border-white/50 dark:border-white/[0.08] shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] rounded-2xl sm:rounded-3xl p-3 sm:p-4 ring-1 ring-black/5 dark:ring-white/10 lg:flex lg:min-h-0 lg:flex-col lg:overflow-hidden ${desktopDockCollapsed ? 'lg:hidden' : ''}`}>
           {/* 移动端拖动条 */}
           <div
             ref={handleRef}
@@ -2086,7 +2133,18 @@ export default function InputBar() {
           </div>
 
           <div className="mb-3 border-b border-slate-200/70 pb-3 dark:border-white/[0.08]">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">提示词生图区</h2>
+            <div className="flex items-start justify-between gap-2">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">提示词生图区</h2>
+              <button
+                type="button"
+                onClick={() => setDesktopDockCollapsed(true)}
+                className="hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/[0.08] dark:hover:text-slate-200 lg:inline-flex"
+                title="收起提示词生图区"
+                aria-label="收起提示词生图区"
+              >
+                <SidebarRightIcon className="h-4 w-4" />
+              </button>
+            </div>
             <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
               上传参考图或粘贴提示词，按需调整尺寸、质量、格式等参数，一键生成可直接使用的成品图。
             </p>

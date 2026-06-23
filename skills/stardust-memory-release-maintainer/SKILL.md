@@ -30,6 +30,8 @@ If the user asks for GitHub/open-source handling, read `references/github-releas
 
 If the user asks for product/version/startup/API behavior, read `references/project-rules.md`.
 
+If the user asks for version fixes, new requirements, login, platform API, local proxy changes, startup scripts, database/NAS work, or says that new work must not break previous versions, read `docs/change-control.md` from the repository before planning or editing.
+
 ## Release Workflow
 
 For a normal version update:

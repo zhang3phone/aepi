@@ -187,11 +187,13 @@ export async function getApiErrorMessage(response: Response): Promise<string> {
   let errorMsg = `HTTP ${response.status}`
   try {
     const errJson = await response.json()
+    const proxyHint = typeof errJson.error?.hint === 'string' ? errJson.error.hint : typeof errJson.hint === 'string' ? errJson.hint : ''
     if (errJson.error?.message) errorMsg = errJson.error.message
     else if (typeof errJson.detail === 'string') errorMsg = errJson.detail
     else if (Array.isArray(errJson.detail)) errorMsg = errJson.detail.map((item: unknown) => typeof item === 'string' ? item : JSON.stringify(item)).join('\n')
     else if (typeof errJson.error === 'string') errorMsg = errJson.error
     else if (errJson.message) errorMsg = errJson.message
+    if (proxyHint && !errorMsg.includes(proxyHint)) errorMsg = `${errorMsg}\n\n${proxyHint}`
   } catch {
     try {
       errorMsg = await response.text()
